@@ -23,6 +23,11 @@ def context_inputs(a_input):
 
 
 class TestContextInputs:
+    def test_norm_inputs(self, context_inputs):
+        raw = {"test_str_input": {"value": "a-a"}}
+        inputs = context_inputs.norm_inputs(raw)
+        assert inputs["test_str_input"] == ContextStrInput(value="a-a")
+
     def test_build(self, context_inputs, a_input, b_input):
         a_context = context_inputs.contexts["test_str_input"]
         context_inputs.inputs["test_int_input"] = ContextIntInput(value=123)

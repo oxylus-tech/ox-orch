@@ -45,6 +45,8 @@ class TestDjango:
         assert "django_app_1" in enabled
         assert "django_app_2" in enabled
 
+        # FIXME: empty migrations returned whilst the db migrations actually are
+        # applied.
         migrations = django_project.get_applied_migrations()
         assert "django_app_1" in migrations
         assert "django_app_2" in migrations

@@ -56,7 +56,7 @@ class InstallOperation(ShellMixin, Operation):
     force_reinstall: bool = Field(default=False, description="Force package reinstallation.")
     """ Force reinstall. """
 
-    def _apply(self, state, exec_ctx, apps, **inputs):
+    def _apply(self, state, exec_ctx, apps, **contexts):
         if not apps:
             return
 
@@ -67,23 +67,23 @@ class InstallOperation(ShellMixin, Operation):
         apps_req = self._snapshot(apps, True)
         self.log("Install:\n" + "\n".join(f"- {v['package']} @ {v['version']}" for v in state.backward.values()))
 
-        if inputs.dry_run:
+        if contexts.get("dry_run"):
             state.forward = apps_req
         else:
             self.install(state, exec_ctx.shell, apps_req.values(), options=options)
             state.forward = self._snapshot(apps)
 
-    def _rollback(self, state, exec_ctx, **inputs):
+    def _rollback(self, state, exec_ctx, **contexts):
         downgrade = [values for values in state.backward.values() if values.get("version") is not None]
         self.log("Downgrade to:\n" + "\n".join(f"- {vals['package']} @ {vals['version']}" for vals in downgrade))
 
-        if not exec_ctx.run.dry_run and downgrade:
+        if not contexts.get("dry_run") and downgrade:
             self.install(state, exec_ctx.shell, downgrade)
 
         uninstall = [values["package"] for values in state.backward.values() if values.get("version") is None]
         self.log("Remove:\n" + "\n".join(f"- {key}" for key in uninstall))
 
-        if not exec_ctx.run.dry_run and uninstall:
+        if not contexts.get("dry_run") and uninstall:
             self.uninstall(state, exec_ctx.shell, uninstall)
 
     def get_install_options(self):

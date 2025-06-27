@@ -1,7 +1,8 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -10,7 +11,15 @@ from .pydantic import PolymorphicModel
 from .registry import DocumentedRegistry, DocumentedClass
 
 
-__all__ = ("CONTEXT_INPUT_REGISTRY", "ContextInput", "ContextInputs", "Context", "RunContext")
+__all__ = (
+    "CONTEXT_INPUT_REGISTRY",
+    "ContextInput",
+    "RawContextInputs",
+    "ContextInputMap",
+    "ContextInputs",
+    "Context",
+    "RunContext",
+)
 
 
 CONTEXT_INPUT_REGISTRY = DocumentedRegistry()
@@ -52,7 +61,16 @@ class ContextInput(PolymorphicModel, DocumentedClass, ABC):
         pass
 
 
-@dataclass
+RawContextInputs = dict[str, ContextInput | dict[str, Any]]
+"""
+Raw ContextInput data.
+
+It is normalized by the :py:meth:`ContextInputs.norm_inputs` to provide
+"""
+ContextInputMap = dict[str, ContextInput]
+""" Normalized dict of context inputs as used by :py:class:`ContextInputs`. """
+
+
 class ContextInputs:
     """
     Handle contexts building using :py:class:`ContextInput`.
@@ -65,9 +83,34 @@ class ContextInputs:
 
     """
 
-    inputs: dict[str, ContextInput] = field(default_factory=dict)
-    contexts: dict[str, Context] = field(default_factory=dict)
+    inputs: RawContextInputs | ContextInputMap = None
+    contexts: dict[str, Context] = None
     registry: DocumentedRegistry = CONTEXT_INPUT_REGISTRY
+
+    def __init__(
+        self,
+        inputs: RawContextInputs | None = None,
+        contexts: dict[str, Context] | None = None,
+        registry: DocumentedRegistry | None = None,
+    ):
+        self.inputs = inputs and self.norm_inputs(inputs) or {}
+        self.contexts = contexts or {}
+        if registry is not None:
+            self.registry = registry
+
+    def norm_inputs(self, inputs: RawContextInputs) -> ContextInputMap:
+        """
+        Ensure inputs are initialized using the right ContextInput class.
+
+        This allows convenient formatting, without having to provide the
+        polymorphic serialization format.
+        """
+        if isinstance(inputs, dict):
+            for key, values in inputs.items():
+                if isinstance(values, dict):
+                    input_cls = self.registry.get(key)
+                    inputs[key] = input_cls.model_validate(values)
+        return inputs
 
     def build(self, reset: bool = False):
         """

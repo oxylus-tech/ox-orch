@@ -10,21 +10,16 @@ def executor():
 
 
 @pytest.fixture
-def make_spec(shell):
-    def _make(apps):
-        return ExecutionSpec(
-            operation=PipInstall(),
-            shell=shell.spec,
-            # inputs={"apps": apps},
-        )
-
-    return _make
+def spec(shell):
+    return ExecutionSpec(
+        operation=PipInstall(),
+        shell=shell.spec,
+    )
 
 
 class TestDemoInstall:
-    def test_install_with_dependency(self, executor, shell, make_spec, app_store_demo):
+    def test_install_with_dependency(self, executor, shell, spec, app_store_demo):
         apps = app_store_demo.resolve(["demo-1"])
-        spec = make_spec(apps)
         executor.apply_sync(spec, apps=apps)
 
         # demo_1 + demo_2 must be installed
@@ -37,9 +32,8 @@ class TestDemoInstall:
         assert result_1.returncode == 0
         assert result_2.returncode == 0
 
-    def test_rollback_uninstalls_both(self, executor, shell, make_spec, app_store_demo):
+    def test_rollback_uninstalls_both(self, executor, shell, spec, app_store_demo):
         apps = app_store_demo.resolve(["demo-1"])
-        spec = make_spec(apps)
         state = executor.apply_sync(spec, apps=apps)
 
         shell.run_python_module(["pip", "show", "demo-1"])

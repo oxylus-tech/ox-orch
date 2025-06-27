@@ -4,13 +4,23 @@ import logging
 from dataclasses import dataclass, field
 from typing import Generator
 
-from pydantic import Field, field_validator
+from pydantic import Field, model_validator
 
 from ox_orch.operations import Operation, OperationState
 from ox_orch.hooks import ExecutorHook, EXECUTOR_HOOK_REGISTRY
-from ox_orch.core import ContextInput, ContextInputs, Context, RunContext, CONTEXT_INPUT_REGISTRY, register, State
-from ox_orch.core.events import HookEmitter
-from ox_orch.core.shell import ShellSpec, Shell
+from ox_orch.core import (
+    ContextInput,
+    ContextInputs,
+    Context,
+    RunContext,
+    register,
+    State,
+    HookEmitter,
+    ShellSpec,
+    Shell,
+)
+from ox_orch.core.contexts import RawContextInputs
+from ox_orch.utils import load_modules
 
 
 __all__ = ("ExecutionError", "ExecutionSpec", "Executor")
@@ -41,38 +51,27 @@ class ExecutionSpec(ContextInput):
     - run metadata
     """
 
-    operation: Operation
+    operation: Operation = Field(description="The operation to execute.")
     """ Operation to run. """
-    hooks: list[str] = Field(default_factory=list)
+    hooks: list[str] = Field(default_factory=list, description="A list of hooks.")
     """ Hook class paths to load dynamically. """
-    trigger: str = "cli"
+    trigger: str = Field(default="cli", description="What triggered the operation.")
     """ CLI / API / daemon / test. """
-    dry_run: bool = False
+    dry_run: bool = Field(default=False, description="Run in dry mode. Nothing shall be affected.")
     """ Run in dry mode. """
-    shell: ShellSpec | None = None
+    shell: ShellSpec | None = Field(default=None, description="Specify a shell environment.")
     """ Shell cmd_runtime configuration. """
-    inputs: dict[str, ContextInput] = Field(default_factory=dict)
-    """ User inputs arguments. """
+    modules: list[str] = Field(
+        default_factory=list, description="A list of module path to load (allows operation and hooks registration."
+    )
 
-    @field_validator("inputs", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def _context_inputs_cls(cls, data):
-        """
-        Ensure inputs are initialized using the right ContextInput class.
-
-        This allows convenient formatting, without having to provide the
-        polymorphic serialization format.
-        """
-        if isinstance(data, dict):
-            for key, values in data.items():
-                if isinstance(values, dict):
-                    input_cls = CONTEXT_INPUT_REGISTRY.get(key)
-                    data[key] = input_cls.model_validate(values)
+    def _load_modules(cls, data):
+        if modules := data.get("modules"):
+            # TODO: modules validation
+            load_modules(modules)
         return data
-
-    def get_run_context(self) -> RunContext:
-        """Return a new RunContext based on spec."""
-        return RunContext(trigger=self.trigger, dry_run=self.dry_run)
 
     def build_context(self, context_inputs=None, run_context=None, **kwargs):
         """
@@ -85,6 +84,10 @@ class ExecutionSpec(ContextInput):
             shell=Shell.from_spec(self.shell),
             spec=self,
         )
+
+    def get_run_context(self) -> RunContext:
+        """Return a new RunContext based on spec."""
+        return RunContext(trigger=self.trigger, dry_run=self.dry_run)
 
 
 @dataclass
@@ -118,7 +121,9 @@ class Executor(HookEmitter):
     hook_class = ExecutorHook
     hook_registry = EXECUTOR_HOOK_REGISTRY
 
-    def apply(self, spec: ExecutionSpec, **contexts: dict[str, ContextInput]) -> Generator[State, State]:
+    def apply(
+        self, spec: ExecutionSpec, inputs: RawContextInputs | None = None, **contexts: dict[str, ContextInput]
+    ) -> Generator[State, State]:
         """
         Execute an operation using the provided configuration.
 
@@ -133,7 +138,7 @@ class Executor(HookEmitter):
         ctx = spec.build_context()
 
         contexts["exec_ctx"] = ctx
-        context_inputs = ContextInputs(inputs=spec.inputs, contexts=contexts)
+        context_inputs = ContextInputs(inputs=inputs, contexts=contexts)
         context_inputs.build()
         operation = spec.operation
         state = operation.create_state(run_context=run_context)
@@ -160,7 +165,11 @@ class Executor(HookEmitter):
             raise ExecutionError(str(exc)) from exc
 
     def rollback(
-        self, spec: ExecutionSpec, state: OperationState, **contexts: dict[str, ContextInput]
+        self,
+        spec: ExecutionSpec,
+        state: OperationState,
+        inputs: RawContextInputs | None = None,
+        **contexts: dict[str, ContextInput],
     ) -> Generator[State, State]:
         """
         Rollback an operation.
@@ -179,7 +188,7 @@ class Executor(HookEmitter):
         ctx = spec.build_context(run=state.run_context)
 
         contexts["exec_ctx"] = ctx
-        context_inputs = ContextInputs(inputs=spec.inputs, contexts=contexts)
+        context_inputs = ContextInputs(inputs=inputs, contexts=contexts)
         context_inputs.build()
         operation = spec.operation
 

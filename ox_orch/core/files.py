@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from .pydantic import hydrate as hydrate_
 
 
-__all__ = ("FileBackend", "YAMLBackend", "JSONBackend", "backends")
+__all__ = ("FileBackend", "YAMLBackend", "JSONBackend", "JSONLBackend", "backends")
 
 
 class FileBackend(ABC):
@@ -18,8 +18,7 @@ class FileBackend(ABC):
     This provides the base interface to read and write files, including
     serialization and deserialization using pydantic models.
 
-    The pydantic model can be provided though :py:attr:`model_class`. If
-    not, the backend assume to be itself a model class.
+    The pydantic model can be provided though :py:attr:`model_class`.
 
     .. note::
 
@@ -33,7 +32,7 @@ class FileBackend(ABC):
     as_list: bool = False
     """ Save and load data as list of items. """
 
-    def __init__(self, model_class: BaseModel, as_list: bool = False):
+    def __init__(self, model_class: BaseModel | None = None, as_list: bool = False):
         self.model_class = model_class
         self.as_list = as_list
 
@@ -48,6 +47,9 @@ class FileBackend(ABC):
         """
         with open(path, encoding="utf-8") as f:
             data = self.parse(f)
+            if self.model_class is None:
+                return data
+
             if self.as_list:
                 if not isinstance(data, list):
                     raise ValueError("Read data must be a list.")
@@ -72,10 +74,15 @@ class FileBackend(ABC):
             if self.as_list:
                 if not isinstance(obj, (list, tuple)):
                     obj = [obj]
-                dump = [o.model_dump(mode="json") for o in obj]
+                dump = [self._dump(o) for o in obj]
             else:
-                dump = obj.model_dump(mode="json")
+                dump = self._dump(obj)
             self.write(f, dump)
+
+    def _dump(self, obj):
+        if self.model_class and isinstance(obj, self.model_class):
+            return obj.model_dump(mode="json")
+        return obj
 
     def _assert_obj_type(self, obj):
         if not isinstance(obj, self.model_class):
@@ -178,6 +185,7 @@ class JSONLBackend(FileBackend):
 
 backends = {
     "yaml": YAMLBackend,
+    "yml": YAMLBackend,
     "json": JSONBackend,
     "jsonl": JSONLBackend,
 }

@@ -102,6 +102,11 @@ class State(StateInfo):
     # class Config:
     #    arbitrary_types_allowed = True
 
+    @property
+    def get_status_display(self) -> str:
+        """Return label for the current status."""
+        return Status(self.status).label
+
     # ---- Status get
     def is_any(self, *statuses: list[Status]) -> bool:
         """Return True if operation is one of the provided statuses."""

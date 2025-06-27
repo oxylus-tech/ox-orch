@@ -11,6 +11,7 @@ from .registry import Registry, RegisteredClass, register
 from .pydantic import PolymorphicModel
 from .state import Status, State, HistoryState, TreeState, ChangeSet
 from .stores import Store, MemoryStore, FileStore
+from .shell import ShellExecutionError, ShellSpec, ShellResult, LocalShell, Shell, SHELL_REGISTRY
 from .trace import TraceEvent, ReplayState, ExecutionReplay
 
 
@@ -41,4 +42,11 @@ __all__ = (
     "TraceEvent",
     "ReplayState",
     "ExecutionReplay",
+    "ShellExecutionError",
+    "ShellSpec",
+    "ShellResult",
+    "LocalShell",
+    "Shell",
+    "Local",
+    "SHELL_REGISTRY",
 )

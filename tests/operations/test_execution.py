@@ -68,9 +68,10 @@ class TestExecutor:
             yield state
 
         operation._apply = _apply.__get__(operation, FakeOperation)
-        spec = ExecutionSpec(operation=operation, inputs={"test_a_input": a_input})
-        state = executor.apply_sync(spec)
+        spec = ExecutionSpec(operation=operation)
 
+        inputs = {"test_a_input": a_input}
+        state = executor.apply_sync(spec, inputs=inputs)
         assert state._value == "a"
 
     def test_apply_failure(self, executor, operation, state):
@@ -118,12 +119,5 @@ class TestExecutor:
 class TestExecutionSpec:
     def test_create_spec(self, operation):
         spec = ExecutionSpec(operation=operation)
-
         assert spec.operation is operation
         assert spec.dry_run is False
-        assert isinstance(spec.inputs, dict)
-
-    def test_spec__context_inputs_from_cls(self, operation, a_input):
-        spec = ExecutionSpec(operation=operation, inputs={"test_str_input": {"value": "a-a"}})
-
-        assert spec.inputs["test_str_input"] == ContextStrInput(value="a-a")
