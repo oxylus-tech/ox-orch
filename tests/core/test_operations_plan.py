@@ -1,6 +1,8 @@
 import pytest
 
+from pydantic import ValidationError
 from django_installer.core.state import State
+from django_installer.core.operations import AppsPlan, AppPlan
 
 
 @pytest.fixture
@@ -48,15 +50,25 @@ class TestPlan:
         assert plan_state.error == str(exc)
 
 
-# class TestAppsPlan:
-#     def test___init__(self, apps_plan):
-#         pass
-#
-#     def test___init__fails_with_operations(self, apps_plan):
-#         pass
-#
-#     def test_get_app_plan(self, apps_plan):
-#         pass
-#
-#     def test_get_operation(self, apps_plan):
-#         pass
+class TestAppsPlan:
+    def test___init__(self, apps_plan):
+        assert len(apps_plan.operations) == len(apps_plan.pre_operations) + len(apps_plan.apps)
+
+        assert apps_plan.operations == apps_plan.get_operations()
+
+    def test___init__fails_with_operations(self):
+        with pytest.raises(ValidationError):
+            AppsPlan(operations=[])
+
+    def test_get_operation(self, apps_plan):
+        ops = apps_plan.get_operations()
+        assert ops[0] == apps_plan.pre_operations[0]
+        assert isinstance(ops[1], AppPlan)
+        assert ops[1].app == apps_plan.apps[0]
+        assert ops[1].operations == apps_plan.app_operations
+        assert ops[2].app == apps_plan.apps[1]
+
+    def test_get_app_plan(self, apps_plan, app_meta):
+        plan = apps_plan.get_app_plan(app_meta)
+        assert plan.app == app_meta
+        assert plan.operations == apps_plan.app_operations

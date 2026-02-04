@@ -3,6 +3,7 @@ from typing import Callable
 
 from django.utils.translation import gettext_lazy as _
 
+from pydantic import BaseModel
 from django_installer.utils import LazyTranslation
 from ..apps import AppMetadata
 from ..state import OperationState, State
@@ -11,15 +12,11 @@ from ..state import OperationState, State
 __all__ = ("AbstractOperation", "RunPython")
 
 
-class AbstractOperation(ABC):
+class AbstractOperation(BaseModel, ABC):
     """Base class for all install operations."""
 
     name: str
     label: LazyTranslation = ""
-
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
 
     def create_state(self, **kwargs) -> OperationState:
         return OperationState(name=self.name, _operation=self, **kwargs)

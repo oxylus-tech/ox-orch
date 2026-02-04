@@ -1,9 +1,12 @@
 import pytest
 
-from django_installer.core.operations import AbstractOperation, Plan
+from django_installer.core.operations import AbstractOperation, Plan, AppsPlan
 
 
 class Operation(AbstractOperation):
+    applied: bool = False
+    rollbacked: bool = False
+
     def _apply(self, exc=None, **kw):
         if exc:
             raise exc
@@ -31,5 +34,5 @@ def plan(op, op_1):
 
 
 @pytest.fixture
-def parent_plan(plan, op, op_1):
-    return Plan(name="plan", operations=[op, plan, op_1])
+def apps_plan(app_metas, plan, op, op_1):
+    return AppsPlan(name="plan", apps=app_metas, pre_operations=[op], app_operations=[op_1])

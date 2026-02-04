@@ -1,4 +1,5 @@
 from typing import Optional, Type
+from pydantic import root_validator
 
 from .base import AbstractOperation
 from ..apps import AppMetadata
@@ -93,21 +94,21 @@ class AppsPlan(Plan):
     """ Operations to run after AppPlan ones. """
     app_operations: Optional[list[AbstractOperation]] = None
     """ Operation to set on each AppPlan. """
+    operations: Optional[list[AbstractOperation]] = None
 
     app_plan_class: Type[AppPlan] = AppPlan
 
     def __init__(self, **kwargs):
-        self.forbid_operations_field(kwargs)
-
         super().__init__(**kwargs)
 
         if self.pre_operations is None:
-            self.pre_operations = type(self).pre_operations or []
+            self.pre_operations = []  # type(self).pre_operations or []
         if self.post_operations is None:
-            self.post_operations = type(self).post_operations or []
+            self.post_operations = []  # type(self).post_operations or []
 
-        self.operations = self.get_operations(self.apps)
+        self.operations = self.get_operations()
 
+    @root_validator(pre=True)
     def forbid_operations_field(cls, values):
         if "operations" in values:
             raise ValueError(
@@ -116,9 +117,9 @@ class AppsPlan(Plan):
             )
         return values
 
-    def get_app_plan(self, app: AppMetadata, **kwargs):
-        kwargs["operations"] = self.app_operations
-        return self.app_plan_class(app=app, **kwargs)
-
     def get_operations(self):
         return self.pre_operations + [self.get_app_plan(app) for app in self.apps] + self.post_operations
+
+    def get_app_plan(self, app: AppMetadata, **kwargs):
+        kwargs["operations"] = self.app_operations or []
+        return self.app_plan_class(app=app, **kwargs)
