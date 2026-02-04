@@ -1,0 +1,120 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+
+[project]
+name = "django-installer"
+description = "Define application installation workflow, and allow users to install them."
+readme = "README.rst"
+license = "GPL-3.0-or-later"
+
+dynamic = ["version"]
+
+
+[tool.poetry]
+version = "0.0.1"
+authors = ["Thomas Baquet <thomas oxylus app>"]
+packages = [
+    { include = "django_installer" },
+]
+include = [
+    # assets are provided as npm packages
+    # {path="assets", format="sdist"},
+    {path="docs", format="sdist"},
+    {path="tests", format="sdist"},
+]
+exclude = [
+]
+
+classifiers = [
+    "Framework :: Django",
+    "Framework :: Oxylus",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.11",
+]
+
+
+[tool.poetry.dependencies]
+python = "^3.13"
+Django = "^5"
+djangorestframework = "^3"
+django-filter = "*"
+pyyaml = "^6.0.3"
+pydantic = "^2.12.5"
+
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+ipython = "*"
+pre-commit = "*"
+black = "*"
+ruff = "*"
+pytest = "*"
+pytest-django = "*"
+
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+Sphinx = "*"
+# sphinx-js = "*"
+sphinx-rtd-theme = "*"
+sphinx-autodoc-typehints = "*"
+
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "instance.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = ["tests"]
+
+
+[tool.black]
+line-length = 120
+exclude = '''
+    /(
+          \.egg
+        | \.git
+        | \.hg
+        | \.tox
+        | \._build
+        | \.build
+        | \.bulk-out
+        | \.dist
+        | \.__pycache__
+        | \.venv
+        | \.migrations
+        | \.static
+        | \.ox/settings
+        | \.scripts
+    )
+'''
+
+
+[tool.ruff]
+line-length = 120
+exclude = [
+    "egg",
+    "git",
+    "hg",
+    "tox",
+    "_build",
+    "build",
+    "dist",
+    "__pycache__",
+    "venv",
+    "*/migrations",
+    "static",
+    "ox/settings",
+    "scripts/",
+]
+
+
+[tool.semantic_release]
+version_variables = ["django_installer/__init__.py:__version__"]
+version_toml = [
+    "pyproject.toml:tool.poetry.version",
+]
