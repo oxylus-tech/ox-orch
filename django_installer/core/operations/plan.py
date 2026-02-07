@@ -1,22 +1,26 @@
-from typing import Optional, Type
-from pydantic import root_validator
+from __future__ import annotations
 
-from .base import AbstractOperation
-from ..apps import AppMetadata
-from ..state import OperationState, State
+from typing import Optional, Type, Generator
+from pydantic import root_validator, Field
+
+from .base import AbstractOperation, register_operation
+from ..apps import AppMetadata, resolve_install_order
+from ..registry import AppRegistry
+from ..state import State, Status
 
 
-__all__ = ("Plan", "AppPlan")
+__all__ = ("Plan", "AppPlan", "AppsPlan")
 
 
+@register_operation
 class Plan(AbstractOperation):
     """Run multiple operations sequentially."""
 
     operations: list[AbstractOperation]
     """ The operations to run. """
-    name: str = "plan"
+    name = "plan"
 
-    def create_state(self, **kwargs) -> OperationState:
+    def create_state(self, **kwargs) -> State:
         kwargs["states"] = []
         state = super().create_state(**kwargs)
         for idx, op in enumerate(self.operations):
@@ -37,21 +41,40 @@ class Plan(AbstractOperation):
                     raise ValueError(f"Missing state for operation `{op}`")
                 op.validate_state(state.states[idx])
 
-    def _apply(self, state, **kwargs):
+    def _apply(self, state, **kwargs) -> Generator[State]:
+        """
+        Execute nested operations.
+
+        On failure, it will rollback the whole current operation before raising
+        the exception again. The ``**kwargs`` arguments will be passed down to
+        the :py:meth:`rollback` method.
+
+        .. note::
+
+            Since the operation raise once rolled back, parent Plan class will
+            will rollback too.
+
+        """
         kwargs["plan"] = self
 
         for idx, op in enumerate(self.operations):
             try:
                 op_state = state.states[idx]
-                op.apply(state=op_state, **kwargs)
+                yield from op.apply(state=op_state, **kwargs)
             except Exception as exc:
-                state.fail(exc)
-                self.rollback(state, op_idx=idx, **kwargs)
-                state.rolled_back(exc)
+                yield state.fail(exc)
+                yield from self.rollback(state, op_idx=idx, **kwargs)
                 raise
-        state.finish()
 
-    def _rollback(self, state, op_idx=None, **kwargs):
+    def _rollback(self, state, op_idx=None, **kwargs) -> Generator[State]:
+        """
+        Execute rollbacks for nested operations (in reverse order).
+
+        On failure, state will be marked as failed and error is raised.
+
+        :param state: the actual state
+        :param op_idx: rollback from to operation (to start)
+        """
         kwargs["plan"] = self
 
         if op_idx:
@@ -60,41 +83,51 @@ class Plan(AbstractOperation):
             ops, states = self.operations, state.states
 
         for op, op_state in zip(reversed(ops), reversed(states)):
-            try:
-                if not op_state.any(State.PENDING, State.ROLLED_BACK):
-                    op.rollback(op_state, **kwargs)
-            except Exception as exc:
-                state.fail(exc)
-                raise
-        state.rolled_back()
+            # on failed, calling rollback handles it
+            if not op_state.is_any(Status.PENDING, Status.ROLLED_BACK):
+                yield from op.rollback(op_state, **kwargs)
 
 
+@register_operation
 class AppPlan(Plan):
     app: AppMetadata
+    name = "app_plan"
 
     def _apply(self, **kwargs):
         kwargs["app"] = self.app
-        super()._apply(**kwargs)
+        yield from super()._apply(**kwargs)
 
     def _rollback(self, **kwargs):
         kwargs["app"] = self.app
-        super()._apply(**kwargs)
+        yield from super()._apply(**kwargs)
 
 
+@register_operation
 class AppsPlan(Plan):
     """
     Installation plan for multiple applications.
+
+    The main idea behind AppsPlan is to provide a set of operations that is common
+    among different calls. For example, provide a standard workflow for app install
+    or update.
+
+    To set applications, you either explicitely set them on an instance
+    (:py:meth:`set_apps`), or by loading them by name from the application
+    registry (:py:meth:`load_apps`). The latest return a clone of self by default.
     """
 
-    apps: list[AppMetadata]
-    """ Ordered list of applications. """
     pre_operations: Optional[list[AbstractOperation]] = None
     """ Operations to run before AppPlan ones. """
     post_operations: Optional[list[AbstractOperation]] = None
     """ Operations to run after AppPlan ones. """
     app_operations: Optional[list[AbstractOperation]] = None
     """ Operation to set on each AppPlan. """
-    operations: Optional[list[AbstractOperation]] = None
+    apps: list[AppMetadata] = Field(exclude=True, default_factory=list)
+    """ Ordered list of applications, set using :py:meth:`set_apps` or :py:meth:`load_apps` """
+    operations: Optional[list[AbstractOperation]] = Field(exclude=True, default_factory=list)
+    """ The operations generated by :py:meth:`set_apps`. """
+
+    name = "apps_plan"
 
     app_plan_class: Type[AppPlan] = AppPlan
 
@@ -106,16 +139,23 @@ class AppsPlan(Plan):
         if self.post_operations is None:
             self.post_operations = []  # type(self).post_operations or []
 
-        self.operations = self.get_operations()
+        self.operations = None
 
     @root_validator(pre=True)
-    def forbid_operations_field(cls, values):
-        if "operations" in values:
+    def validate_forbidden_fields(cls, values):
+        """Forbid operations to be provided"""
+        if values.get("operations"):
             raise ValueError(
                 "You are not allowed to set `operations` on AppsPlan; use `app_plans`, `pre_operations`,"
                 "`post_operations` instead"
             )
+        if values.get("apps"):
+            raise ValueError("You are not allowed to set `apps` on AppsPlan; use `set_apps` or " "`load_apps`.")
         return values
+
+    def set_apps(self, apps):
+        self.apps = apps
+        self.operations = self.get_operations()
 
     def get_operations(self):
         return self.pre_operations + [self.get_app_plan(app) for app in self.apps] + self.post_operations
@@ -123,3 +163,18 @@ class AppsPlan(Plan):
     def get_app_plan(self, app: AppMetadata, **kwargs):
         kwargs["operations"] = self.app_operations or []
         return self.app_plan_class(app=app, **kwargs)
+
+    def load_apps(self, registry: AppRegistry, names: list[str], clone: bool = True) -> AppsPlan:
+        """
+        Load applications and their dependencies from registry and set them
+        on instance.
+
+        When ``clone`` is True (default behavior), the applications are loaded
+        into a copy of self instead of modifying instance inplace.
+        """
+        apps = registry.get_all_with_deps(names)
+        apps = resolve_install_order(apps)
+        if clone:
+            self = self.clone()
+        self.set_apps(apps)
+        return self

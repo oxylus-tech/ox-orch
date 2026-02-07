@@ -1,7 +1,9 @@
 import pytest
 
 from django_installer.core.operations import RunPython
-from django_installer.core.state import State
+from django_installer.core.state import Status
+
+from .conftest import apply, rollback, assert_states
 
 
 @pytest.fixture
@@ -38,37 +40,55 @@ class TestAbstractOperation:
             op.validate_state(op_state)
 
     def test_apply(self, op, op_state):
-        op.apply(op_state)
+        states, _ = apply(op, op_state)
+
         assert op.applied
-        assert op_state.state == State.DONE
+        assert op_state.status == Status.COMPLETED
+        assert_states(states, [(op.name, Status.RUNNING), (op.name, Status.COMPLETED)])
 
     def test_apply_fail(self, op, op_state):
         exc = RuntimeError("test")
-        with pytest.raises(RuntimeError):
-            op.apply(op_state, exc=exc)
+        states, exc_ = apply(op, op_state, exc=exc)
 
-        assert op_state.state == State.FAILED
+        assert exc_ is exc
+        assert op_state.status == Status.FAILED
         assert op_state.error == str(exc)
+        assert_states(
+            states,
+            [
+                (op.name, Status.RUNNING),
+                (op.name, Status.FAILED, str(exc)),
+            ],
+        )
 
     def test_rollback(self, op, op_state):
-        op.rollback(op_state)
+        states, _ = rollback(op, op_state)
+
         assert op.rollbacked
-        assert op_state.state == State.ROLLED_BACK
+        assert op_state.status == Status.ROLLED_BACK
+        assert_states(states, [(op.name, Status.ROLLING_BACK), (op.name, Status.ROLLED_BACK)])
 
     def test_rollback_fail(self, op, op_state):
         exc = RuntimeError("test")
-        with pytest.raises(RuntimeError):
-            op.rollback(op_state, rexc=exc)
+        states, exc_ = rollback(op, op_state, rexc=exc)
 
-        assert op_state.state == State.FAILED
+        assert exc_ is exc
+        assert op_state.status == Status.FAILED
         assert op_state.error == str(exc)
+        assert_states(
+            states,
+            [
+                (op.name, Status.ROLLING_BACK),
+                (op.name, Status.FAILED, str(exc)),
+            ],
+        )
 
 
 class TestRunPython:
     def test__apply(self, pyop, pyop_state):
-        pyop.apply(pyop_state)
-        assert pyop_state.state == State.DONE
+        apply(pyop, pyop_state)
+        assert pyop_state.status == Status.COMPLETED
 
     def test__rollback(self, pyop, pyop_state):
-        pyop.rollback(pyop_state)
-        assert pyop_state.state == State.ROLLED_BACK
+        rollback(pyop, pyop_state)
+        assert pyop_state.status == Status.ROLLED_BACK

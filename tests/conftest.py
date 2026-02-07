@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from django_installer.core.apps import AppMetadata
@@ -16,3 +18,8 @@ def app_meta_1():
 @pytest.fixture
 def app_metas(app_meta, app_meta_1):
     return [app_meta, app_meta_1]
+
+
+@pytest.fixture
+def data_dir():
+    return Path(__file__).parent / "data"

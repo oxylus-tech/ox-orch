@@ -1,8 +1,10 @@
 import pytest
 
 from pydantic import ValidationError
-from django_installer.core.state import State
+from django_installer.core.state import Status
 from django_installer.core.operations import AppsPlan, AppPlan
+
+from .conftest import apply, rollback, assert_states
 
 
 @pytest.fixture
@@ -14,40 +16,73 @@ class TestPlan:
     def test_create_state(self, plan, plan_state):
         plan.validate_state(plan_state)
 
-    def test__apply(self, plan, plan_state):
-        plan.apply(plan_state)
+    def test__apply(self, plan, plan_state, op, op_1):
+        states, _ = apply(plan, plan_state)
+        assert plan_state.status == Status.COMPLETED
+        assert_states(
+            states,
+            [
+                (plan.name, Status.RUNNING),
+                (op.name, Status.RUNNING),
+                (op.name, Status.COMPLETED),
+                (op_1.name, Status.RUNNING),
+                (op_1.name, Status.COMPLETED),
+                (plan.name, Status.COMPLETED),
+            ],
+        )
 
-        assert len(plan_state.states)
-        assert plan_state.state == State.DONE
-        assert all(s.state == State.DONE for s in plan_state.states)
-
-    def test__apply_fails_with_op(self, plan, plan_state):
+    def test__apply_fails_with_op(self, plan, plan_state, op, op_1):
         exc = RuntimeError("foo")
+        states, exc_ = apply(plan, plan_state, exc=exc)
 
-        with pytest.raises(RuntimeError):
-            plan.apply(plan_state, exc=exc)
+        assert exc_ is exc
+        assert plan_state.status == Status.ROLLED_BACK
+        assert_states(
+            states,
+            [
+                (plan.name, Status.RUNNING),
+                (op.name, Status.RUNNING),
+                (op.name, Status.FAILED, exc),
+                (plan.name, Status.FAILED, exc),
+                (plan.name, Status.ROLLING_BACK),
+                (op.name, Status.ROLLING_BACK),
+                (op.name, Status.ROLLED_BACK),
+                (plan.name, Status.ROLLED_BACK),
+            ],
+        )
 
-        assert plan_state.state == State.ROLLED_BACK
-        assert plan_state.states[0].state == State.ROLLED_BACK
-        assert plan_state.states[1].state == State.PENDING
-
-    def test__rollback(self, plan, plan_state):
+    def test__rollback(self, plan, plan_state, op, op_1):
         # Force one value to not be pending
-        plan_state.states[1].state = State.DONE
-        plan.rollback(plan_state)
+        # Note that only op_1 will be rolled back, no op
+        plan_state.states[1].status = Status.COMPLETED
+        states, exc_ = rollback(plan, plan_state)
 
-        assert plan_state.state == State.ROLLED_BACK
-        assert all(s.any(State.ROLLED_BACK, State.PENDING) for s in plan_state.states)
+        assert plan_state.status == Status.ROLLED_BACK
+        assert_states(
+            states,
+            [
+                (plan.name, Status.ROLLING_BACK),
+                (op_1.name, Status.ROLLING_BACK),
+                (op_1.name, Status.ROLLED_BACK),
+                (plan.name, Status.ROLLED_BACK),
+            ],
+        )
 
-    def test__rollback_fails_with_op(self, plan, plan_state):
-        plan_state.states[0].state = State.DONE
+    def test__rollback_fails_with_op(self, plan, plan_state, op):
+        plan_state.states[0].status = Status.COMPLETED
         exc = RuntimeError("bar")
-        with pytest.raises(RuntimeError):
-            plan.rollback(plan_state, rexc=exc)
+        states, exc_ = rollback(plan, plan_state, rexc=exc)
 
-        assert plan_state.state == State.FAILED
-        assert plan_state.states[0].state == State.FAILED
-        assert plan_state.error == str(exc)
+        assert exc is exc_
+        assert_states(
+            states,
+            [
+                (plan.name, Status.ROLLING_BACK),
+                (op.name, Status.ROLLING_BACK),
+                (op.name, Status.FAILED, exc),
+                (plan.name, Status.FAILED, exc),
+            ],
+        )
 
 
 class TestAppsPlan:
@@ -56,9 +91,13 @@ class TestAppsPlan:
 
         assert apps_plan.operations == apps_plan.get_operations()
 
-    def test___init__fails_with_operations(self):
+    def test___init__fails_with_operations(self, op):
         with pytest.raises(ValidationError):
-            AppsPlan(operations=[])
+            AppsPlan(operations=[op])
+
+    def test___init__fails_with_apps(self, app_meta):
+        with pytest.raises(ValidationError):
+            AppsPlan(apps=[app_meta])
 
     def test_get_operation(self, apps_plan):
         ops = apps_plan.get_operations()
