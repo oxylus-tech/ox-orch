@@ -4,7 +4,7 @@ from typing import Optional, Type, Generator
 from pydantic import root_validator, Field
 
 from .base import AbstractOperation, register_operation
-from ..apps import AppMetadata, resolve_install_order
+from ..apps import AppMetadata
 from ..registry import AppRegistry
 from ..state import State, Status
 
@@ -172,8 +172,7 @@ class AppsPlan(Plan):
         When ``clone`` is True (default behavior), the applications are loaded
         into a copy of self instead of modifying instance inplace.
         """
-        apps = registry.get_all_with_deps(names)
-        apps = resolve_install_order(apps)
+        apps = registry.get_full(names)
         if clone:
             self = self.clone()
         self.set_apps(apps)

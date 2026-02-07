@@ -4,7 +4,7 @@ from typing import Iterable, Optional
 from django.utils.translation import gettext as __
 from pydantic import BaseModel, Field
 
-from .apps import AppMetadata
+from .apps import AppMetadata, resolve_install_order
 
 
 __all__ = (
@@ -23,7 +23,7 @@ class NotFoundError(Exception):
 
 
 AppDict = dict[str, AppMetadata]
-""" AppMetadata as a dict of ``app_name: AppMetadata``. """
+""" AppMetadata as a dict of ``app_id: AppMetadata``. """
 
 
 class AppRegistry:
@@ -37,24 +37,24 @@ class AppRegistry:
     """ Storage source URL/information """
 
     @abstractmethod
-    def is_installed(self, name: str) -> bool:
+    def is_installed(self, id: str) -> bool:
         """Return True whether an app is installed."""
         pass
 
     @abstractmethod
-    def get(self, name: str, exc: bool = False) -> AppMetadata | None:
-        """Get app by name.
+    def get(self, id: str, exc: bool = False) -> AppMetadata | None:
+        """Get app by id.
 
-        :param name: application name
+        :param id: application id
         :param exc: raise :py:class:`NotFoundError` if not found.
         """
         pass
 
     @abstractmethod
-    def get_all(self, names: list[str], exc: bool = False) -> list[AppMetadata]:
-        """Get all apps corresponding to those names.
+    def get_all(self, ids: list[str], exc: bool = False) -> list[AppMetadata]:
+        """Get all apps corresponding to those ids.
 
-        :param names: application names
+        :param ids: application ids
         :param exc: raise :py:class:`NotFoundError` if not found.
         """
         pass
@@ -64,41 +64,40 @@ class AppRegistry:
         """
         Search in the registry using the provided lookups.
 
-        Lookups are AppMetadata attribute names + value(s).
+        Lookups are AppMetadata attribute ids + value(s).
 
         When multiple values are provided, it looks for those matching at
         least one of them. When multiple lookups are provided, it looks
         for those matching both lookups.
 
-        Registry should provided support for at least: ``name`` (contains),
+        Registry should provided support for at least: ``id`` (contains),
         ``tags`` and ``groups``.
         """
         pass
 
     # ---- implementated methods
-    def get_all_with_deps(
-        self, names: Iterable[str], _apps: Optional[dict[str, AppMetadata]] = None
-    ) -> list[AppMetadata]:
+    def get_full(self, ids: Iterable[str], _apps: Optional[dict[str, AppMetadata]] = None) -> list[AppMetadata]:
         """
         Get all applications metadata including their dependencies.
 
-        :param names: application names
+        :param ids: application ids
+        :return: apps and dependencies ordered by install order.
         :yield NotFoundError: some application(s) haven't been found.
         """
         apps = _apps or {}
         if apps:
-            names = [n for n in names if n not in apps]
+            ids = [n for n in ids if n not in apps]
 
-        if names:
-            apps.update({app.name: app for app in AppRegistry.get_all(names)})
+        if ids:
+            apps.update({app.id: app for app in self.get_all(ids)})
 
-        missings = {n for n in names if n not in apps}
+        missings = {n for n in ids if n not in apps}
         if missings:
             raise NotFoundError(missings)
 
         todo = {dep for app in apps.values() for dep in app.dependencies if dep not in apps}
-        apps.update(self.get_all_with_deps(todo, apps))
-        return apps
+        todo and self.get_full(todo, apps)
+        return resolve_install_order(apps.values())
 
 
 class MemoryAppRegistry(AppRegistry, BaseModel):
@@ -115,28 +114,28 @@ class MemoryAppRegistry(AppRegistry, BaseModel):
     """ The registered applications. """
 
     def __init__(self, apps: Iterable[AppMetadata] | AppDict | None = None, **kwargs):
-        if not isinstance(apps, (None, dict)):
-            apps = {a.id for a in apps}
+        if not isinstance(apps, (type(None), dict)):
+            apps = {a.id: a for a in apps}
         super().__init__(apps=apps, **kwargs)
 
-    def is_installed(self, name):
-        if app := self.get(name):
+    def is_installed(self, id):
+        if app := self.get(id):
             return app.installed_at is not None
         return False
 
-    def get(self, name: str, exc: bool = False):
-        if app := self.apps.get(name):
+    def get(self, id: str, exc: bool = False):
+        if app := self.apps.get(id):
             return app
         elif exc:
-            raise NotFoundError([name])
+            raise NotFoundError([id])
 
-    def get_all(self, names: list[str], exc: bool = False):
+    def get_all(self, ids: list[str], exc: bool = False):
         apps, missings = [], []
-        for name in names:
-            if app := self.get(name):
+        for id in ids:
+            if app := self.get(id):
                 apps.append(app)
             elif exc:
-                missings.append(name)
+                missings.append(id)
 
         if missings:
             raise NotFoundError(missings)

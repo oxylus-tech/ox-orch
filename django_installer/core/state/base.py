@@ -19,17 +19,17 @@ class Status(TextChoices):
     for each choice.
     """
 
-    PENDING = "pending", _("Pending")
+    PENDING = "pending", _("🕐 Pending")
     """ Operation is awaiting for execution. """
-    RUNNING = "running", _("Running")
+    RUNNING = "running", _("🟠️ Running")
     """ Operation is running. """
-    ROLLING_BACK = "rolling_back", _("Rolling back")
+    ROLLING_BACK = "rolling_back", _("⏪ Rolling back")
     """ Rolling back is running. """
-    COMPLETED = "completed", _("Completed")
+    COMPLETED = "completed", _("✅ Completed")
     """ Operation was successfully completed. """
-    FAILED = "failed", _("Failed")
+    FAILED = "failed", _("❌ Failed")
     """ Operation failed. """
-    ROLLED_BACK = "rolled_back", _("Rolled back")
+    ROLLED_BACK = "rolled_back", _("❕Rolled back")
     """ Operation was successfully rolled-back. """
 
 

@@ -20,8 +20,8 @@ class FileBackend(ABC):
 
     .. note::
 
-        This class can't be used directly. You should use :py:class:`YAMLFileBackend`
-        or :py:class:`JSONFileBackend` instead.
+        This class can't be used directly. You should use :py:class:`YAMLBackend`
+        or :py:class:`JSONBackend` instead.
 
     """
 

@@ -53,6 +53,9 @@ class StateFileBackend(StateBackend):
 
     You must provide a :py:class:`~django_installer.core.files.FileBackend`
     subclass to handle file writing and saving.
+
+    At loading, when a state is provided but the file doesn't exists, it will
+    return the state (by using ``super.load`` method call).
     """
 
     def __init__(self, path: Path, backend_class: Type[FileBackend], state: Optional[State] = None):
@@ -61,6 +64,9 @@ class StateFileBackend(StateBackend):
         super().__init__(state)
 
     def load(self):
+        if not self.path.exists() and self.state:
+            return super().load()
+
         self.state = self.backend.load(self.path)
         return self.state
 

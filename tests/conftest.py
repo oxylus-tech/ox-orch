@@ -7,17 +7,48 @@ from django_installer.core.apps import AppMetadata
 
 @pytest.fixture
 def app_meta():
-    return AppMetadata(id="test", name="Test", version="0.0.1", package="django_installer_test")
+    return AppMetadata(
+        id="test",
+        name="Test",
+        version="0.0.1",
+        package="django_installer_test",
+        groups=["group-1", "group"],
+        tags=["tag-1", "tag"],
+    )
 
 
 @pytest.fixture
 def app_meta_1():
-    return AppMetadata(id="test-1", name="Test 1", version="0.0.1", package="django_installer_test")
+    return AppMetadata(
+        id="test-1", name="Test 1", version="0.0.1", package="django_installer_test", groups=["group"], tags=["tag"]
+    )
 
 
 @pytest.fixture
-def app_metas(app_meta, app_meta_1):
-    return [app_meta, app_meta_1]
+def app_dep(app_meta, app_meta_1):
+    return AppMetadata(
+        id="test-d",
+        name="Test D",
+        version="0.0.1",
+        package="django_installer_test",
+        dependencies=[app_meta.id, app_meta_1.id],
+    )
+
+
+@pytest.fixture
+def app_dep_1(app_meta, app_dep):
+    return AppMetadata(
+        id="test-d-1",
+        name="Test D 1",
+        version="0.0.1",
+        package="django_installer_test",
+        dependencies=[app_meta.id, app_dep.id],
+    )
+
+
+@pytest.fixture
+def app_metas(app_meta, app_meta_1, app_dep, app_dep_1):
+    return [app_meta, app_meta_1, app_dep, app_dep_1]
 
 
 @pytest.fixture
