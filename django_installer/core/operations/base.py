@@ -4,13 +4,21 @@ from typing import Any, Callable, Generator, Type, ClassVar
 
 from django.utils.translation import gettext_lazy as _
 
-from pydantic import BaseModel
-from django_installer.utils import LazyTranslation
+from django_installer.utils import CloneBaseModel, LazyTranslation
+
 from ..apps import AppMetadata
 from ..state import State, Status
 
 
-__all__ = ("AbstractOperation", "RunPython", "register_operation", "get_operation_class")
+__all__ = (
+    # re-export for convenience
+    "OperationState",
+    "Status",
+    "AbstractOperation",
+    "RunPython",
+    "register_operation",
+    "get_operation_class",
+)
 
 
 _OPERATION_REGISTRY: dict[str, Type["AbstractOperation"]] = {}
@@ -20,24 +28,36 @@ def register_operation(cls):
     """
     Register an operation to allow it to be serializable, using :py:meth:`name`.
     """
-    op_name = cls.name
-    if registered_cl := _OPERATION_REGISTRY.get(op_name):
-        if _OPERATION_REGISTRY[op_name] is not cls:
-            raise ValueError(f"An operation is already registered for {op_name} ({registered_cl}")
+    op_id = cls.operation_id
+    if registered_cl := _OPERATION_REGISTRY.get(op_id):
+        if _OPERATION_REGISTRY[op_id] is not cls:
+            raise ValueError(f"An operation is already registered for {op_id} ({registered_cl}")
     else:
-        _OPERATION_REGISTRY[op_name] = cls
+        _OPERATION_REGISTRY[op_id] = cls
     return cls
 
 
-def get_operation_class(op_name: str):
+def get_operation_class(op_id: str):
     """Get operation class by name."""
     try:
-        return _OPERATION_REGISTRY[op_name]
+        return _OPERATION_REGISTRY[op_id]
     except KeyError:
-        raise ValueError(f"Unknown operation type: {op_name}")
+        raise ValueError(f"Unknown operation type: {op_id}")
 
 
-class AbstractOperation(BaseModel, ABC):
+class OperationState(State):
+    """
+    Keep state informations of an operation.
+    """
+
+    operation_id: str = None
+    """ Operation id. """
+
+    _operation = None
+    """ Actual operation instance (set at Operation's state validation). """
+
+
+class AbstractOperation(CloneBaseModel, ABC):
     """
     Abstract base class for all install operations.
 
@@ -47,25 +67,31 @@ class AbstractOperation(BaseModel, ABC):
 
     The :py:meth:`apply` and :py:meth:`rollback` are the two main entry points
     for executing the operation. It handles state handling, rollback on failure
-    (apply), and yield :py:class:`~django_installer.core.state.base.State` updates.
+    (apply), and yield :py:class:`~django_installer.core.state.base.OperationState` updates.
 
     Implementator will implement the actual operation calls inside :py:meth:`_apply`
-    and :py:meth:`_rollback`. Those can be regular method or a State generator.
+    and :py:meth:`_rollback`. Those can be regular method or a OperationState generator.
     """
 
-    name: ClassVar[str]
-    label: LazyTranslation = ""
+    operation_id: ClassVar[str]
+    label: ClassVar[LazyTranslation] = ""
 
-    def create_state(self, **kwargs) -> State:
-        return State(name=type(self).name, _operation=self, **kwargs)
+    def create_state(self, **kwargs) -> OperationState:
+        return OperationState(
+            operation_id=type(self).operation_id,
+            _operation=self,
+            name=str(type(self).label or type(self).operation_id),
+            **kwargs,
+        )
 
-    def validate_state(self, state: State, recurse: bool = False):
-        if not state._operation and state.name == type(self).name:
+    def validate_state(self, state: OperationState, recurse: bool = False):
+        if not state._operation and state.operation_id == type(self).operation_id:
             state._operation = self
+            state.name = str(type(self).label or type(self).operation_id)
         elif state._operation != self:
             raise ValueError(f"Status `{state._operation}` does not matches the operation `{self}`.")
 
-    def apply(self, state: State, **kwargs) -> Generator[State]:
+    def apply(self, state: OperationState, **kwargs) -> Generator[OperationState]:
         """
         Apply operation, ensuring state update.
 
@@ -87,7 +113,7 @@ class AbstractOperation(BaseModel, ABC):
                 yield state.fail(exc)
             raise
 
-    def rollback(self, state: State, **kwargs) -> Generator[State]:
+    def rollback(self, state: OperationState, **kwargs) -> Generator[OperationState]:
         """
         Rollback operation, ensuring state update.
 
@@ -124,30 +150,21 @@ class AbstractOperation(BaseModel, ABC):
         Example: ``{ type: "migrations", config: {...} }``
         """
         return {
-            "name": self.name,
+            "operation_id": self.operation_id,
             "config": super().model_dump(**kwargs),
         }
 
     @classmethod
     def model_validate(cls, obj, **kwargs):
-        """Dispatch to correct subclass based on `name`."""
+        """Dispatch to correct subclass based on `operation_id`."""
         if not isinstance(obj, dict):
             raise TypeError("Operation must be a dict")
 
-        op_name = obj.get("name")
+        op_id = obj.get("operation_id")
         config = obj.get("config", {})
 
-        op_cls = get_operation_class(op_name)
+        op_cls = get_operation_class(op_id)
         return op_cls(**config)
-
-    def clone(self, **kwargs):
-        """Clone node overriding values using ``**kwargs``.
-
-        Note that the values will be validated using ``model_validate``.
-        """
-        data = self.model_dump(mode="json")
-        data.update(kwargs)
-        return type(self).model_validate(data)
 
 
 @register_operation
@@ -156,8 +173,8 @@ class RunPython(AbstractOperation):
 
     forward: Callable[(AppMetadata, AbstractOperation), None]
     backward: Callable[(AppMetadata, AbstractOperation), None]
-    label: LazyTranslation = _("Run python code")
-    name = "run_python"
+    label = _("🐍 Run python code")
+    operation_id = "run_python"
 
     def _apply(self, **kwargs):
         self.forward(self, **kwargs)

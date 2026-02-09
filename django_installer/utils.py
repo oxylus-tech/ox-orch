@@ -1,9 +1,26 @@
 from typing import Any
 
 from django.utils.functional import Promise
+from pydantic import BaseModel
 
 
-__all__ = ("LazyTranslation",)
+__all__ = (
+    "CloneBaseModel",
+    "LazyTranslation",
+)
+
+
+class CloneBaseModel(BaseModel):
+    """Pydantic BaseModel that can clone itself."""
+
+    def clone(self, **kwargs):
+        """Clone node overriding values using ``**kwargs``.
+
+        Note that the values will be validated using ``model_validate``.
+        """
+        data = self.model_dump(mode="json")
+        data.update(kwargs)
+        return type(self).model_validate(data)
 
 
 class LazyTranslation:

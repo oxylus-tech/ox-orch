@@ -1,10 +1,13 @@
+from __future__ import annotations
 from abc import abstractmethod
-from typing import Iterable, Optional
+from pathlib import Path
+from typing import Iterable, Type
 
 from django.utils.translation import gettext as __
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
-from .apps import AppMetadata, resolve_install_order
+from . import files
+from .apps import AppID, AppMetadata, resolve_install_order
 
 
 __all__ = (
@@ -12,6 +15,7 @@ __all__ = (
     "AppDict",
     "AppRegistry",
     "MemoryAppRegistry",
+    "FileAppRegistry",
 )
 
 
@@ -19,6 +23,7 @@ class NotFoundError(Exception):
     def __init__(self, apps: Iterable[AppMetadata], msg=None, **kwargs):
         if not msg:
             msg = __("The following apps could not be found: {apps}").format(apps=apps)
+        self.apps = apps
         super().__init__(msg, **kwargs)
 
 
@@ -37,12 +42,7 @@ class AppRegistry:
     """ Storage source URL/information """
 
     @abstractmethod
-    def is_installed(self, id: str) -> bool:
-        """Return True whether an app is installed."""
-        pass
-
-    @abstractmethod
-    def get(self, id: str, exc: bool = False) -> AppMetadata | None:
+    def get(self, app_id: AppID, exc: bool = False) -> AppMetadata | None:
         """Get app by id.
 
         :param id: application id
@@ -51,7 +51,7 @@ class AppRegistry:
         pass
 
     @abstractmethod
-    def get_all(self, ids: list[str], exc: bool = False) -> list[AppMetadata]:
+    def get_all(self, app_ids: list[AppID], exc: bool = False) -> list[AppMetadata]:
         """Get all apps corresponding to those ids.
 
         :param ids: application ids
@@ -75,8 +75,13 @@ class AppRegistry:
         """
         pass
 
+    @abstractmethod
+    def save_state(self, app: AppMetadata):
+        """Persist app's state to store."""
+        pass
+
     # ---- implementated methods
-    def get_full(self, ids: Iterable[str], _apps: Optional[dict[str, AppMetadata]] = None) -> list[AppMetadata]:
+    def get_full(self, app_ids: Iterable[AppID]) -> list[AppMetadata]:
         """
         Get all applications metadata including their dependencies.
 
@@ -84,19 +89,26 @@ class AppRegistry:
         :return: apps and dependencies ordered by install order.
         :yield NotFoundError: some application(s) haven't been found.
         """
-        apps = _apps or {}
-        if apps:
-            ids = [n for n in ids if n not in apps]
+        apps: dict[str, "AppMetadata"] = {}
 
-        if ids:
-            apps.update({app.id: app for app in self.get_all(ids)})
+        def visit(batch_ids: list[str]):
+            to_fetch = [aid for aid in batch_ids if aid not in apps]
+            if not to_fetch:
+                return
 
-        missings = {n for n in ids if n not in apps}
-        if missings:
-            raise NotFoundError(missings)
+            fetched_apps = self.get_all(to_fetch)
+            next_batch: list[str] = []
 
-        todo = {dep for app in apps.values() for dep in app.dependencies if dep not in apps}
-        todo and self.get_full(todo, apps)
+            for app in fetched_apps:
+                apps[app.id] = app
+                for dep_id in app.dependencies:
+                    if dep_id not in apps:
+                        next_batch.append(dep_id)
+
+            if next_batch:
+                visit(next_batch)
+
+        visit(app_ids)
         return resolve_install_order(apps.values())
 
 
@@ -118,44 +130,110 @@ class MemoryAppRegistry(AppRegistry, BaseModel):
             apps = {a.id: a for a in apps}
         super().__init__(apps=apps, **kwargs)
 
-    def is_installed(self, id):
-        if app := self.get(id):
-            return app.installed_at is not None
-        return False
-
-    def get(self, id: str, exc: bool = False):
-        if app := self.apps.get(id):
+    def get(self, app_id: AppID, exc: bool = False):
+        if app := self.apps.get(app_id):
             return app
         elif exc:
-            raise NotFoundError([id])
+            raise NotFoundError([app_id])
 
-    def get_all(self, ids: list[str], exc: bool = False):
+    def get_all(self, app_ids: list[AppID], exc: bool = False):
         apps, missings = [], []
-        for id in ids:
-            if app := self.get(id):
+        for app_id in app_ids:
+            if app := self.get(app_id):
                 apps.append(app)
             elif exc:
-                missings.append(id)
+                missings.append(app_id)
 
         if missings:
             raise NotFoundError(missings)
         return apps
 
-    def prefetch(self):
+    def save_state(self, app):
         pass
 
     def search(self, **lookups):
-        items = []
+        items = {}
 
         for app in self.apps.values():
+            if app.id in items:
+                continue
+
             for key, search in lookups.items():
-                attr = (getattr(app, key, "") or "").lower()
+                attr = getattr(app, key, "") or ""
                 if isinstance(search, str):
                     if search in attr:
-                        items.append(app)
+                        items[app.id] = app
                         continue
                 else:
                     if any(v in attr for v in search):
-                        items.append(app)
+                        items[app.id] = app
                         continue
-        return items
+        return list(items.values())
+
+
+class FileAppRegistry(MemoryAppRegistry):
+    """
+    Load and store the whole registry in a single file.
+
+    You should call :py:meth:`from_yaml` or :py:meth:`from_json`.
+    """
+
+    _path: Path = PrivateAttr()
+    _backend: files.FileBackend = PrivateAttr()
+
+    def __init__(self, _path: Path, _backend: files.FileBackend, **data):
+        super().__init__(**data)
+        self._path = _path
+        self._backend = _backend
+
+    @classmethod
+    def from_yaml(cls, path: Path, **kwargs) -> FileAppRegistry:
+        """
+        Use :py:class:`.files.YAMLBackend` and try to load registry if it exists.
+
+        :param path: path of the file
+        :param **kwargs: extra fields values
+        """
+        return cls.from_backend(path, files.YAMLBackend, **kwargs)
+
+    @classmethod
+    def from_json(cls, path: Path, **kwargs) -> FileAppRegistry:
+        """
+        Use :py:class:`.files.JSONBackend` and try to load registry if it exists.
+
+        :param path: path of the file
+        :param **kwargs: extra fields values
+        """
+        return cls.from_backend(path, files.JSONBackend, **kwargs)
+
+    @classmethod
+    def from_backend(
+        cls, path: Path, backend_class: Type[files.FileBackend], load: bool = True, **kwargs
+    ) -> FileAppRegistry:
+        """
+        Return FileAppRegistry for the provided path and backend class.
+
+        If the file exists on filesystem, it will be loaded before the new
+        instance is returned.
+
+        :param path: path of the file
+        :param backend_class: file backend class to use
+        :param load: whether to load file before init (default) or not.
+        :param **kwargs: extra fields values
+        """
+
+        backend = backend_class(cls)
+        kwargs["_path"] = path
+        kwargs["_backend"] = backend
+        if path.exists():
+            return backend.load(path, **kwargs)
+        return cls(**kwargs)
+
+    def save(self):
+        """Save registry to file."""
+        self._backend.save(self._path, self)
+
+    def save_state(self, app):
+        """Save state (the whole registry actually) to file."""
+        self.apps[app.id] = app  # ensure we have the updated app
+        self.save()

@@ -10,7 +10,7 @@ from django_installer.core.operations import AbstractOperation, Plan, AppsPlan, 
 class Operation(AbstractOperation):
     applied: bool = False
     rollbacked: bool = False
-    name = "operation"
+    operation_id = "operation"
 
     def _apply(self, exc=None, **kw):
         if exc:
@@ -49,12 +49,12 @@ def assert_states(states, expected: list[tuple[str, state.Status, Optional[str |
     """
     Assert states values from the provided list of expected results.
 
-    Expected values are: ``name``, ``status``, ``error`` (optional).
+    Expected values are: ``operation_id``, ``status``, ``error`` (optional).
     """
     assert len(states) == len(expected)
 
-    for op_state, (name, status, *err) in zip(states, expected):
-        assert op_state.name == name
+    for op_state, (operation_id, status, *err) in zip(states, expected):
+        assert op_state.operation_id == operation_id
         assert op_state.status == status
         if err:
             assert op_state.error == str(err[0])
@@ -62,22 +62,22 @@ def assert_states(states, expected: list[tuple[str, state.Status, Optional[str |
 
 @pytest.fixture
 def op():
-    return Operation(name="op")
+    return Operation(operation_id="op")
 
 
 @pytest.fixture
 def op_1():
-    return Operation(name="op_1")
+    return Operation(operation_id="op_1")
 
 
 @pytest.fixture
 def plan(op, op_1):
-    return Plan(name="plan", operations=[op, op_1])
+    return Plan(operation_id="plan", operations=[op, op_1])
 
 
 @pytest.fixture
 def apps_plan(app_metas, plan, op, op_1):
-    obj = AppsPlan(name="plan", pre_operations=[op], app_operations=[op_1])
+    obj = AppsPlan(operation_id="plan", pre_operations=[op], app_operations=[op_1])
     obj.set_apps(app_metas)
     return obj
 

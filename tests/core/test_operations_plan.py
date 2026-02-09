@@ -17,17 +17,19 @@ class TestPlan:
         plan.validate_state(plan_state)
 
     def test__apply(self, plan, plan_state, op, op_1):
-        states, _ = apply(plan, plan_state)
+        states, exc_ = apply(plan, plan_state)
+
+        assert not exc_
         assert plan_state.status == Status.COMPLETED
         assert_states(
             states,
             [
-                (plan.name, Status.RUNNING),
-                (op.name, Status.RUNNING),
-                (op.name, Status.COMPLETED),
-                (op_1.name, Status.RUNNING),
-                (op_1.name, Status.COMPLETED),
-                (plan.name, Status.COMPLETED),
+                (plan.operation_id, Status.RUNNING),
+                (op.operation_id, Status.RUNNING),
+                (op.operation_id, Status.COMPLETED),
+                (op_1.operation_id, Status.RUNNING),
+                (op_1.operation_id, Status.COMPLETED),
+                (plan.operation_id, Status.COMPLETED),
             ],
         )
 
@@ -40,36 +42,43 @@ class TestPlan:
         assert_states(
             states,
             [
-                (plan.name, Status.RUNNING),
-                (op.name, Status.RUNNING),
-                (op.name, Status.FAILED, exc),
-                (plan.name, Status.FAILED, exc),
-                (plan.name, Status.ROLLING_BACK),
-                (op.name, Status.ROLLING_BACK),
-                (op.name, Status.ROLLED_BACK),
-                (plan.name, Status.ROLLED_BACK),
+                (plan.operation_id, Status.RUNNING),
+                (op.operation_id, Status.RUNNING),
+                (op.operation_id, Status.FAILED, exc),
+                (plan.operation_id, Status.FAILED, exc),
+                (plan.operation_id, Status.ROLLING_BACK),
+                (op.operation_id, Status.ROLLING_BACK),
+                (op.operation_id, Status.ROLLED_BACK),
+                (plan.operation_id, Status.ROLLED_BACK),
             ],
         )
 
     def test__rollback(self, plan, plan_state, op, op_1):
         # Force one value to not be pending
         # Note that only op_1 will be rolled back, no op
-        plan_state.states[1].status = Status.COMPLETED
+        plan_state.status = Status.COMPLETED
+        plan_state.children[0].status = Status.COMPLETED
+        plan_state.children[1].status = Status.COMPLETED
         states, exc_ = rollback(plan, plan_state)
 
+        assert not exc_
         assert plan_state.status == Status.ROLLED_BACK
         assert_states(
             states,
             [
-                (plan.name, Status.ROLLING_BACK),
-                (op_1.name, Status.ROLLING_BACK),
-                (op_1.name, Status.ROLLED_BACK),
-                (plan.name, Status.ROLLED_BACK),
+                (plan.operation_id, Status.ROLLING_BACK),
+                (op.operation_id, Status.ROLLING_BACK),
+                (op.operation_id, Status.ROLLED_BACK),
+                (op_1.operation_id, Status.ROLLING_BACK),
+                (op_1.operation_id, Status.ROLLED_BACK),
+                (plan.operation_id, Status.ROLLED_BACK),
             ],
         )
 
     def test__rollback_fails_with_op(self, plan, plan_state, op):
-        plan_state.states[0].status = Status.COMPLETED
+        plan_state.status = Status.COMPLETED
+        plan_state.children[0].status = Status.COMPLETED
+        plan_state.children[1].status = Status.COMPLETED
         exc = RuntimeError("bar")
         states, exc_ = rollback(plan, plan_state, rexc=exc)
 
@@ -77,10 +86,10 @@ class TestPlan:
         assert_states(
             states,
             [
-                (plan.name, Status.ROLLING_BACK),
-                (op.name, Status.ROLLING_BACK),
-                (op.name, Status.FAILED, exc),
-                (plan.name, Status.FAILED, exc),
+                (plan.operation_id, Status.ROLLING_BACK),
+                (op.operation_id, Status.ROLLING_BACK),
+                (op.operation_id, Status.FAILED, exc),
+                (plan.operation_id, Status.FAILED, exc),
             ],
         )
 

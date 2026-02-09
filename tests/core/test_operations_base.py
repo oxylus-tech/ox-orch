@@ -14,7 +14,7 @@ def op_state(op):
 @pytest.fixture
 def pyop():
     return RunPython(
-        name="test",
+        operation_id="test",
         forward=lambda obj, **kw: obj.__dict__.update({"forwarded": True}),
         backward=lambda obj, **kw: obj.__dict__.update({"backwarded": True}),
     )
@@ -34,9 +34,9 @@ class TestAbstractOperation:
         op.validate_state(op_state)
         assert op_state._operation == op
 
-    def test_validate_state_invalid_name(self, op, op_state):
+    def test_validate_state_invalid_operation_id(self, op, op_state):
         with pytest.raises(ValueError):
-            op_state.name = "wrong name"
+            op_state.operation_id = "wrong operation_id"
             op.validate_state(op_state)
 
     def test_apply(self, op, op_state):
@@ -44,7 +44,7 @@ class TestAbstractOperation:
 
         assert op.applied
         assert op_state.status == Status.COMPLETED
-        assert_states(states, [(op.name, Status.RUNNING), (op.name, Status.COMPLETED)])
+        assert_states(states, [(op.operation_id, Status.RUNNING), (op.operation_id, Status.COMPLETED)])
 
     def test_apply_fail(self, op, op_state):
         exc = RuntimeError("test")
@@ -56,19 +56,21 @@ class TestAbstractOperation:
         assert_states(
             states,
             [
-                (op.name, Status.RUNNING),
-                (op.name, Status.FAILED, str(exc)),
+                (op.operation_id, Status.RUNNING),
+                (op.operation_id, Status.FAILED, str(exc)),
             ],
         )
 
     def test_rollback(self, op, op_state):
+        op_state.status = Status.COMPLETED
         states, _ = rollback(op, op_state)
 
         assert op.rollbacked
         assert op_state.status == Status.ROLLED_BACK
-        assert_states(states, [(op.name, Status.ROLLING_BACK), (op.name, Status.ROLLED_BACK)])
+        assert_states(states, [(op.operation_id, Status.ROLLING_BACK), (op.operation_id, Status.ROLLED_BACK)])
 
     def test_rollback_fail(self, op, op_state):
+        op_state.status = Status.COMPLETED
         exc = RuntimeError("test")
         states, exc_ = rollback(op, op_state, rexc=exc)
 
@@ -78,8 +80,8 @@ class TestAbstractOperation:
         assert_states(
             states,
             [
-                (op.name, Status.ROLLING_BACK),
-                (op.name, Status.FAILED, str(exc)),
+                (op.operation_id, Status.ROLLING_BACK),
+                (op.operation_id, Status.FAILED, str(exc)),
             ],
         )
 
@@ -90,5 +92,6 @@ class TestRunPython:
         assert pyop_state.status == Status.COMPLETED
 
     def test__rollback(self, pyop, pyop_state):
+        pyop_state.status = Status.COMPLETED
         rollback(pyop, pyop_state)
         assert pyop_state.status == Status.ROLLED_BACK

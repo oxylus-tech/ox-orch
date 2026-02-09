@@ -31,9 +31,14 @@ class FileBackend(ABC):
     def __init__(self, model_class: BaseModel):
         self.model_class = model_class
 
-    def load(self, path: Path) -> BaseModel:
+    def load(self, path: Path, **init_kwargs) -> BaseModel:
+        """
+        Load data from file, with extra initial arguments (overriding
+        existing ones).
+        """
         with open(path, encoding="utf-8") as f:
             data = self.parse(f)
+            data = {**data, **init_kwargs}
             return self.model_class.model_validate(data)
 
     def save(self, path: Path, obj: BaseModel):
