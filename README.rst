@@ -5,7 +5,7 @@ This package aims at providing application installer for Django:
 
 - Define installation workflow;
 - Keep track of current installation state;
-- Apply, rollback, dependency resolutions;
+- Apply, rollback, dependency resolutions, implicit updates detection;
 - Application registry: fetch from store, download remote applications;
 - CLI and API utilities to manage installed applications;
 

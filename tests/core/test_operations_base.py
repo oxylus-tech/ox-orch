@@ -44,7 +44,7 @@ class TestAbstractOperation:
 
         assert op.applied
         assert op_state.status == Status.COMPLETED
-        assert_states(states, [(op.operation_id, Status.RUNNING), (op.operation_id, Status.COMPLETED)])
+        assert_states(states, [(op.__type_id__, Status.RUNNING), (op.__type_id__, Status.COMPLETED)])
 
     def test_apply_fail(self, op, op_state):
         exc = RuntimeError("test")
@@ -56,8 +56,8 @@ class TestAbstractOperation:
         assert_states(
             states,
             [
-                (op.operation_id, Status.RUNNING),
-                (op.operation_id, Status.FAILED, str(exc)),
+                (op.__type_id__, Status.RUNNING),
+                (op.__type_id__, Status.FAILED, str(exc)),
             ],
         )
 
@@ -67,7 +67,7 @@ class TestAbstractOperation:
 
         assert op.rollbacked
         assert op_state.status == Status.ROLLED_BACK
-        assert_states(states, [(op.operation_id, Status.ROLLING_BACK), (op.operation_id, Status.ROLLED_BACK)])
+        assert_states(states, [(op.__type_id__, Status.ROLLING_BACK), (op.__type_id__, Status.ROLLED_BACK)])
 
     def test_rollback_fail(self, op, op_state):
         op_state.status = Status.COMPLETED
@@ -80,8 +80,8 @@ class TestAbstractOperation:
         assert_states(
             states,
             [
-                (op.operation_id, Status.ROLLING_BACK),
-                (op.operation_id, Status.FAILED, str(exc)),
+                (op.__type_id__, Status.ROLLING_BACK),
+                (op.__type_id__, Status.FAILED, str(exc)),
             ],
         )
 

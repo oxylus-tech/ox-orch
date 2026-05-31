@@ -3,14 +3,13 @@ from typing import Optional
 import pytest
 
 from django_installer.core import files, state
-from django_installer.core.operations import AbstractOperation, Plan, AppsPlan, register_operation
+from django_installer.core.operations import AbstractOperation, Plan, AppPlan, AppsPlan
 
 
-@register_operation
 class Operation(AbstractOperation):
     applied: bool = False
     rollbacked: bool = False
-    operation_id = "operation"
+    __type_id__ = "op:operation"
 
     def _apply(self, exc=None, **kw):
         if exc:
@@ -71,14 +70,35 @@ def op_1():
 
 
 @pytest.fixture
+def op_2():
+    return Operation(operation_id="op_2")
+
+
+@pytest.fixture
+def op_3():
+    return Operation(operation_id="op_3")
+
+
+@pytest.fixture
 def plan(op, op_1):
     return Plan(operation_id="plan", operations=[op, op_1])
 
 
 @pytest.fixture
-def apps_plan(app_metas, plan, op, op_1):
-    obj = AppsPlan(operation_id="plan", pre_operations=[op], app_operations=[op_1])
-    obj.set_apps(app_metas)
+def app_plan(op, op_1):
+    return AppPlan(operations=[op, op_1])
+
+
+@pytest.fixture
+def apps_plan(mem_registry, app_meta, app_meta_1, app_plan, op, op_1, op_2, op_3):
+    obj = AppsPlan(
+        registry=mem_registry,
+        operation_id="plan",
+        app_plan=app_plan,
+        pre_operations=[op, op_1],
+        operations=[op_2, op_3],
+    )
+    obj.set_apps([app_meta, app_meta_1])
     return obj
 
 

@@ -2,13 +2,12 @@ from typing import Generator, Optional
 
 from ..state import StateBackend, Status
 
-from .base import OperationState, AbstractOperation, RunPython, register_operation, get_operation_class
-from .plan import Plan, AppPlan, AppsPlan
+from .base import OperationState, AbstractOperation, RunPython
+from .plan import Plan
+from .apps_plan import AppPlanState, AppPlan, AppsPlan
 
 
 __all__ = (
-    "register_operation",
-    "get_operation_class",
     # Base
     "OperationState",
     "AbstractOperation",
@@ -16,6 +15,7 @@ __all__ = (
     # Plan
     "Plan",
     "AppPlan",
+    "AppPlanState",
     "AppsPlan",
     # re-exports
     "Status",
@@ -55,8 +55,8 @@ def rollback(
 
 
 def wait(
-    func, operation: AbstractOperation, state: OperationState, *args, **kwargs
-) -> tuple[list[OperationState], Exception | None]:
+    func, operation: AbstractOperation, state: OperationState, raises=True, *args, **kwargs
+) -> list[OperationState] | tuple[list[OperationState], Exception | None]:
     """
     Execute the provided :py:meth:`apply` or :py:meth:`rollback` function and
     return the results.
@@ -83,4 +83,6 @@ def wait(
             states.append(state)
     except Exception as err:
         exc = err
-    return states, exc
+        if raises:
+            raise
+    return states if raises else states, exc

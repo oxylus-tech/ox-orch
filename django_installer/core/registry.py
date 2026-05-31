@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import abstractmethod
 from pathlib import Path
-from typing import Iterable, Type
+from typing import Any, Iterable, Optional, Type
 
 from django.utils.translation import gettext as __
 from pydantic import BaseModel, Field, PrivateAttr
@@ -51,11 +51,19 @@ class AppRegistry:
         pass
 
     @abstractmethod
-    def get_all(self, app_ids: list[AppID], exc: bool = False) -> list[AppMetadata]:
+    def get_all(self, app_ids: Optional[list[AppID]] = False, exc: bool = False) -> list[AppMetadata]:
         """Get all apps corresponding to those ids.
 
         :param ids: application ids
         :param exc: raise :py:class:`NotFoundError` if not found.
+        """
+        pass
+
+    @abstractmethod
+    def get_dependents(self, app_ids: list[AppID]) -> Iterable[AppMetadata]:
+        """Return all apps that depends on provided app ids (included).
+
+        Note that they are not topologically ordered.
         """
         pass
 
@@ -75,10 +83,34 @@ class AppRegistry:
         """
         pass
 
-    @abstractmethod
-    def save_state(self, app: AppMetadata):
-        """Persist app's state to store."""
-        pass
+    def commit(self, updates: dict[AppID, dict[str, Any]], exc: bool = False) -> list[AppMetadata]:
+        """
+        Update application state.
+
+        .. code-block:: python
+
+            registry.update({
+                "my.app": {
+                    "installed_version": "1.2.0",
+                    "last_migration": "0004_auto",
+                }
+            })
+
+        Default implementation only update applications' data and return an
+        updated version of it (apps are retrieved using :py:meth:`get_all`).
+
+        :param updates: a dict (by app id) of fields to update;
+        :returns: a list of updated AppMetadata
+        """
+        if not updates:
+            return []
+
+        apps = self.get_all(updates.keys(), exc=exc)
+        for app in apps:
+            update = updates.get(app.id)
+            for key, value in update.items():
+                setattr(app, key, value)
+        return apps
 
     # ---- implementated methods
     def get_full(self, app_ids: Iterable[AppID]) -> list[AppMetadata]:
@@ -136,7 +168,10 @@ class MemoryAppRegistry(AppRegistry, BaseModel):
         elif exc:
             raise NotFoundError([app_id])
 
-    def get_all(self, app_ids: list[AppID], exc: bool = False):
+    def get_all(self, app_ids: Optional[list[AppID]] = None, exc: bool = False):
+        if app_ids is None:
+            return list(self.apps.values())
+
         apps, missings = [], []
         for app_id in app_ids:
             if app := self.get(app_id):
@@ -144,12 +179,32 @@ class MemoryAppRegistry(AppRegistry, BaseModel):
             elif exc:
                 missings.append(app_id)
 
-        if missings:
+        if missings and exc:
             raise NotFoundError(missings)
         return apps
 
-    def save_state(self, app):
-        pass
+    def get_dependents(self, app_ids: Iterable[str]) -> list[AppMetadata]:
+        # Build the inverse dependency graph
+        inverse_graph = {app_id: set() for app_id in self.apps}
+        for app in self.apps.values():
+            for dep in app.dependencies or []:
+                if dep in self.apps:
+                    inverse_graph[dep].add(app)
+
+        # BFS/DFS to collect all dependents
+        visited = set()
+        dependents = set()
+        to_visit = list(app_ids)
+
+        while to_visit:
+            current = to_visit.pop()
+            for dependent in inverse_graph.get(current, set()):
+                if dependent.id not in visited:
+                    visited.add(dependent.id)
+                    dependents.add(dependent)
+                    to_visit.append(dependent.id)
+
+        return list(dependents)
 
     def search(self, **lookups):
         items = {}
@@ -229,11 +284,12 @@ class FileAppRegistry(MemoryAppRegistry):
             return backend.load(path, **kwargs)
         return cls(**kwargs)
 
+    def commit(self, updates: dict[AppID, dict[str, Any]], exc: bool = False):
+        """Commit and save to file."""
+        apps = super().commit(updates, exc)
+        self.save()
+        return apps
+
     def save(self):
         """Save registry to file."""
         self._backend.save(self._path, self)
-
-    def save_state(self, app):
-        """Save state (the whole registry actually) to file."""
-        self.apps[app.id] = app  # ensure we have the updated app
-        self.save()

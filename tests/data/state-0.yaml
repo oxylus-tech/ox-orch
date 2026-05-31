@@ -1,6 +1,8 @@
-error: null
-history: []
-name: operation
-state: pending
-children: []
-updated: '2026-02-07T16:41:04.172394Z'
+__type_id__: state:op
+config:
+    error: null
+    history: []
+    name: operation
+    state: pending
+    children: []
+    updated: '2026-02-07T16:41:04.172394Z'

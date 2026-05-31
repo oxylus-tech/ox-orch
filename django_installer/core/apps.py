@@ -1,14 +1,14 @@
 from __future__ import annotations
 from datetime import datetime
 from graphlib import TopologicalSorter
-from typing import Optional, TypeAlias
+from typing import TypeAlias
 
 from django.db.models import TextChoices
 from django.utils.translation import gettext_lazy as _
 from pydantic import BaseModel, Field
 
 from . import state
-from .status import Status
+from .state import Status
 
 
 __all__ = ("AppID", "AppMetadata", "resolve_install_order")
@@ -35,7 +35,7 @@ class AppMetadata(BaseModel):
     name: str
     """ Human readable name of the application. """
     version: str
-    """ Version. """
+    """ Package version. """
     package: str
     """ Pypi package providing the app. """
 
@@ -46,8 +46,11 @@ class AppMetadata(BaseModel):
     dependencies: list[str] = Field(default_factory=list)
     """ Required dependencies. """
 
-    state: Optional[AppInstallState] = None
+    state: AppInstallState | None = None
     """ Current application install state. """
+
+    def __hash__(self):
+        return hash(self.id)
 
 
 class InstallOrigin(TextChoices):
@@ -58,16 +61,20 @@ class InstallOrigin(TextChoices):
 class AppInstallState(state.State):
     """Application installation state."""
 
-    installed_at: Optional[datetime] = None
+    version: str
+    """ Application version. """
+    installed_version: str
+    """ Installed version of the application. """
+    origin: InstallOrigin = InstallOrigin.USER
+    """ Install reason """
+    installed_at: datetime | None = None
     """ First installation datetime. """
     enabled: bool = False
     """ The application is enabled. """
-    last_migration: Optional[str] = None
+    last_migration: str | None = None
     """ Last applied migration. """
     dependents: set[str] = set()
     """ Dependent apps. """
-    installed_as: InstallOrigin = InstallOrigin.USER
-    """ Install reason """
 
     @property
     def migrated(self):

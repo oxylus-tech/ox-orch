@@ -1,13 +1,7 @@
 import pytest
 
 
-from django_installer.core.registry import NotFoundError, MemoryAppRegistry, FileAppRegistry
-
-
-@pytest.fixture
-def mem_registry(app_metas):
-    # enforce misordering for iteration and search
-    return MemoryAppRegistry(apps=list(reversed(app_metas)))
+from django_installer.core.registry import NotFoundError, FileAppRegistry
 
 
 @pytest.fixture

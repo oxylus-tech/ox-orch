@@ -1,48 +1,20 @@
-from abc import ABC, abstractmethod
 import inspect
-from typing import Any, Callable, Generator, Type, ClassVar
+from typing import Callable, Generator, ClassVar
 
 from django.utils.translation import gettext_lazy as _
 
-from django_installer.utils import CloneBaseModel, LazyTranslation
+from django_installer.utils import CloneBaseModel, LazyTranslation, PolymorphicModel
 
 from ..apps import AppMetadata
 from ..state import State, Status
 
 
 __all__ = (
-    # re-export for convenience
+    "Status",  # re-export for convenience
     "OperationState",
-    "Status",
     "AbstractOperation",
     "RunPython",
-    "register_operation",
-    "get_operation_class",
 )
-
-
-_OPERATION_REGISTRY: dict[str, Type["AbstractOperation"]] = {}
-
-
-def register_operation(cls):
-    """
-    Register an operation to allow it to be serializable, using :py:meth:`name`.
-    """
-    op_id = cls.operation_id
-    if registered_cl := _OPERATION_REGISTRY.get(op_id):
-        if _OPERATION_REGISTRY[op_id] is not cls:
-            raise ValueError(f"An operation is already registered for {op_id} ({registered_cl}")
-    else:
-        _OPERATION_REGISTRY[op_id] = cls
-    return cls
-
-
-def get_operation_class(op_id: str):
-    """Get operation class by name."""
-    try:
-        return _OPERATION_REGISTRY[op_id]
-    except KeyError:
-        raise ValueError(f"Unknown operation type: {op_id}")
 
 
 class OperationState(State):
@@ -55,9 +27,10 @@ class OperationState(State):
 
     _operation = None
     """ Actual operation instance (set at Operation's state validation). """
+    __type_id__ = "state:op"
 
 
-class AbstractOperation(CloneBaseModel, ABC):
+class AbstractOperation(CloneBaseModel, PolymorphicModel):
     """
     Abstract base class for all install operations.
 
@@ -71,113 +44,125 @@ class AbstractOperation(CloneBaseModel, ABC):
 
     Implementator will implement the actual operation calls inside :py:meth:`_apply`
     and :py:meth:`_rollback`. Those can be regular method or a OperationState generator.
+
+    .. note::
+
+        For the class to be serializable/deserializable, set :py:attr:`django_installer.utils.PolymorphicModel`. The value is namespaced
+        under ``op:``:
+
+        .. code-block:: python
+
+            class MyOp(AbstractOperation):
+                # This is used as state.operation_id value
+                __type_id__ = "op:my_op"
+
     """
 
-    operation_id: ClassVar[str]
     label: ClassVar[LazyTranslation] = ""
+    """ Human readable text (can be Django lazy translation string) """
+    _state_class: ClassVar[State] = OperationState
+    """ Class model to use as a state. """
 
     def create_state(self, **kwargs) -> OperationState:
-        return OperationState(
-            operation_id=type(self).operation_id,
-            _operation=self,
-            name=str(type(self).label or type(self).operation_id),
-            **kwargs,
-        )
+        """Return a new initial operation state."""
+        try:
+            return self._state_class(
+                operation_id=type(self).__type_id__,
+                _operation=self,
+                name=str(type(self).label or type(self).__type_id__),
+                **kwargs,
+            )
+        except Exception:
+            breakpoint()
 
-    def validate_state(self, state: OperationState, recurse: bool = False):
-        if not state._operation and state.operation_id == type(self).operation_id:
+    def validate_state(self, state: OperationState):
+        """Validate provided state agains't this operation.
+
+        It ensures that this state is related to this operation.
+        """
+        if not isinstance(state, self._state_class):
+            raise TypeError(
+                "Invalid type of state for this operation. Expected {self._state_class} " "but we've got {type(state)}"
+            )
+        if not state._operation and state.operation_id == type(self).__type_id__:
             state._operation = self
-            state.name = str(type(self).label or type(self).operation_id)
+            state.name = str(type(self).label or type(self).__type_id__)
         elif state._operation != self:
             raise ValueError(f"Status `{state._operation}` does not matches the operation `{self}`.")
 
-    def apply(self, state: OperationState, **kwargs) -> Generator[OperationState]:
+    def apply(self, state: OperationState, **context) -> Generator[OperationState]:
         """
         Apply operation, ensuring state update.
 
         On failure, it will set state on failure if not yet rolled-back.
 
         :param state: state used for reporting this operation's status;
-        :param **kwargs: extra kwargs arguments passed by the caller;
+        :param **context: extra context arguments passed by the caller;
         """
         try:
+            context = self.get_context(state, **context)
             self.validate_state(state)
+
             yield state.start()
+
             if inspect.isgeneratorfunction(self._apply):
-                yield from self._apply(state=state, **kwargs)
+                yield from self._apply(state=state, **context)
             else:
-                self._apply(state=state, **kwargs)
+                self._apply(state=state, **context)
+
             yield state.finish()
         except Exception as exc:
             if state.status != Status.ROLLED_BACK:
                 yield state.fail(exc)
             raise
 
-    def rollback(self, state: OperationState, **kwargs) -> Generator[OperationState]:
+    def rollback(self, state: OperationState, **context) -> Generator[OperationState]:
         """
         Rollback operation, ensuring state update.
 
         :param state: state used for reporting this operation's status;
-        :param **kwargs: extra kwargs arguments passed by the caller;
+        :param **context: extra context arguments passed by the caller;
         """
         try:
+            context = self.get_context(state, **context)
             self.validate_state(state)
+
             yield state.rolling_back()
+
             if inspect.isgeneratorfunction(self._rollback):
-                yield from self._rollback(state=state, **kwargs)
+                yield from self._rollback(state=state, **context)
             else:
-                self._rollback(state=state, **kwargs)
+                self._rollback(state=state, **context)
+
             yield state.rolled_back()
         except Exception as exc:
             if state.status != Status.ROLLED_BACK:
                 yield state.fail(exc)
             raise
 
-    @abstractmethod
-    def _apply(self, state, **kwargs):
+    def get_context(self, state, **context):
+        context["state"] = state
+        return context
+
+    def _apply(self, state, **context):
         """Where you put the actual code for applying the operation."""
         pass
 
-    @abstractmethod
-    def _rollback(self, state, **kwargs):
+    def _rollback(self, state, **context):
         """Where you put the actual code for applying the operation's rollback."""
         pass
 
-    def model_dump(self, **kwargs) -> dict[str, Any]:
-        """
-        Custom dump format.
 
-        Example: ``{ type: "migrations", config: {...} }``
-        """
-        return {
-            "operation_id": self.operation_id,
-            "config": super().model_dump(**kwargs),
-        }
-
-    @classmethod
-    def model_validate(cls, obj, **kwargs):
-        """Dispatch to correct subclass based on `operation_id`."""
-        if not isinstance(obj, dict):
-            raise TypeError("Operation must be a dict")
-
-        op_id = obj.get("operation_id")
-        config = obj.get("config", {})
-
-        op_cls = get_operation_class(op_id)
-        return op_cls(**config)
-
-
-@register_operation
 class RunPython(AbstractOperation):
     """Run python code."""
 
     forward: Callable[(AppMetadata, AbstractOperation), None]
     backward: Callable[(AppMetadata, AbstractOperation), None]
     label = _("🐍 Run python code")
-    operation_id = "run_python"
+    __type_id__ = "op:run_python"
 
-    def _apply(self, **kwargs):
-        self.forward(self, **kwargs)
+    def _apply(self, **context):
+        self.forward(self, **context)
 
-    def _rollback(self, **kwargs):
-        self.backward(self, **kwargs)
+    def _rollback(self, **context):
+        self.backward(self, **context)

@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy as _
 from django.utils import timezone as tz
 from pydantic import Field
 
-from django_installer import utils
+from .. import utils
 from . import files
 
 
@@ -49,7 +49,7 @@ class StateInfo(utils.CloneBaseModel):
     """ Last update datetime. """
 
 
-class State(StateInfo):
+class State(StateInfo, utils.PolymorphicModel):
     """
     Generic State interface from which all states are derived.
 
@@ -84,6 +84,7 @@ class State(StateInfo):
         Status.ROLLED_BACK: {},
     }
     """ Allowed transitions. """
+    _registry_id = "state"
 
     # class Config:
     #    arbitrary_types_allowed = True

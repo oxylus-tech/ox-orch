@@ -1,51 +1,59 @@
 from __future__ import annotations
 
-from typing import Optional, Type, Generator
-from pydantic import root_validator, Field
+from typing import Annotated, Generator
+from pydantic import Field, field_validator
 
-from .base import OperationState, Status, AbstractOperation, register_operation
-from ..apps import AppMetadata
-from ..registry import AppRegistry
+from .base import OperationState, Status, AbstractOperation
 
 
-__all__ = ("Plan", "AppPlan", "AppsPlan")
+__all__ = (
+    "PlanState",
+    "Plan",
+)
 
 
-@register_operation
+class PlanState(OperationState):
+    """State of a Plan operation."""
+
+    __type_id__ = "state:op:plan"
+
+    children: list[OperationState] = Field(default_factory=list)
+    """ Executed children operation states. """
+    operation_ids: list[AbstractOperation] = Field(default_factory=list)
+    """ Executed operation ids. """
+
+    def get_resume_index(self) -> int:
+        """Return resume index."""
+        return next((i for i, child in enumerate(self.children) if not child.is_completed), len(self.children))
+
+
 class Plan(AbstractOperation):
-    """Run multiple operations sequentially."""
+    """
+    Plan is an operation composed of child operations.
 
-    operations: list[AbstractOperation]
+    Child operations may either be stored in :py:attr:`operations` or
+    generated dynamically by overrding :py:meth:`get_operations`.
+    """
+
+    operations: Annotated[list[AbstractOperation], Field(subclass_ok=True)]
     """ The operations to run. """
-    operation_id = "plan"
+    __type_id__ = "op:plan"
+    _state_class = PlanState
 
     def create_state(self, **kwargs) -> OperationState:
         kwargs["children"] = []
-        state = super().create_state(**kwargs)
-        for idx, op in enumerate(self.operations):
-            op_state = op.create_state()
-            state.children.append(op_state)
-        return state
+        return super().create_state(**kwargs)
 
-    def validate_state(self, state, recurse=False):
-        super().validate_state(state)
+    @field_validator("operations", mode="before")
+    def validate_operations(cls, v):
+        return [AbstractOperation.model_validate(op) if isinstance(op, dict) and "__type__" in op else op for op in v]
 
-        assert len(state.children) == len(self.operations)
-
-        # This arguments avoids double validation on
-        # apply/rollback.
-        if recurse:
-            for idx, op in enumerate(self.operations):
-                if len(state.children) <= idx:
-                    raise ValueError(f"Missing state for operation `{op}`")
-                op.validate_state(state.children[idx])
-
-    def _apply(self, state, **kwargs) -> Generator[OperationState]:
+    def _apply(self, state, **context) -> Generator[OperationState]:
         """
         Execute nested operations.
 
         On failure, it will rollback the whole current operation before raising
-        the exception again. The ``**kwargs`` arguments will be passed down to
+        the exception again. The ``**context`` arguments will be passed down to
         the :py:meth:`rollback` method.
 
         .. note::
@@ -53,127 +61,64 @@ class Plan(AbstractOperation):
             Since the operation raise once rolled back, parent Plan class will
             will rollback too.
 
+        :yield ValueError: state is provided for child operation but does not match.
         """
-        kwargs["plan"] = self
+        operations = self.get_operations(state)
 
-        for idx, op in enumerate(self.operations):
+        start_idx = state.get_resume_index()
+        for idx in range(start_idx, len(operations)):
+            op = operations[idx]
+
             try:
-                op_state = state.children[idx]
-                yield from op.apply(state=op_state, **kwargs)
+                if len(state.children) > idx:
+                    op_state = state.children[idx]
+
+                    if op_state.operation_id != type(op).__type_id__:
+                        raise ValueError(
+                            "State operation id does not match to current operation's one: "
+                            f"{op_state.operation_id} != {type(op).__type_id__}"
+                        )
+
+                else:
+                    op_state = op.create_state()
+                    state.children.append(op_state)
+
+                yield from op.apply(state=op_state, **context)
             except Exception as exc:
                 yield state.fail(exc)
-                kwargs["op_idx"] = idx
-                yield from self.rollback(state, **kwargs)
+                context["op_idx"] = idx
+                yield from self.rollback(state, **context)
                 raise
 
-    def _rollback(self, state, op_idx=None, **kwargs) -> Generator[OperationState]:
+    def _rollback(self, state, **context) -> Generator[OperationState]:
         """
-        Execute rollbacks for nested operations (in reverse order).
+        Execute rollbacks for applied operations (in reverse order).
 
         On failure, state will be marked as failed and error is raised.
 
         :param state: the actual state
-        :param op_idx: rollback from to operation (to start)
+        :param states: applied states to rollback
         """
-        kwargs["plan"] = self
+        operations = list(self.get_operations(state))
+        states = state.children
 
-        if op_idx:
-            ops, children = self.operations[: op_idx + 1], state.children[: op_idx + 1]
-        else:
-            ops, children = self.operations, state.children
+        # When reversed happens, we want the right state being zipped
+        if len(states) < len(operations):
+            applied_count = len(states)
+            operations = operations[:applied_count]
 
-        for op, op_state in zip(reversed(ops), reversed(children)):
-            # on failed, calling rollback handles it
-            if not op_state.is_any(Status.PENDING, Status.ROLLED_BACK):
-                yield from op.rollback(op_state, **kwargs)
+        for op, op_state in zip(reversed(operations), reversed(states)):
+            if op_state.is_any(Status.COMPLETED, Status.RUNNING):
+                yield from op.rollback(op_state, **context)
 
+    def get_context(self, state, **context):
+        context["plan"] = self
+        return super().get_context(state, **context)
 
-@register_operation
-class AppPlan(Plan):
-    app: AppMetadata
-    operation_id = "app_plan"
-
-    def _apply(self, **kwargs):
-        kwargs["app"] = self.app
-        yield from super()._apply(**kwargs)
-
-    def _rollback(self, **kwargs):
-        kwargs["app"] = self.app
-        yield from super()._rollback(**kwargs)
-
-
-@register_operation
-class AppsPlan(Plan):
-    """
-    Installation plan for multiple applications.
-
-    The main idea behind AppsPlan is to provide a set of operations that is common
-    among different calls. For example, provide a standard workflow for app install
-    or update.
-
-    To set applications, you either explicitely set them on an instance
-    (:py:meth:`set_apps`), or by loading them by name from the application
-    registry (:py:meth:`load_apps`). The latest return a clone of self by default.
-    """
-
-    pre_operations: Optional[list[AbstractOperation]] = None
-    """ Operations to run before AppPlan ones. """
-    post_operations: Optional[list[AbstractOperation]] = None
-    """ Operations to run after AppPlan ones. """
-    app_operations: Optional[list[AbstractOperation]] = None
-    """ Operation to set on each AppPlan. """
-    apps: list[AppMetadata] = Field(exclude=True, default_factory=list)
-    """ Ordered list of applications, set using :py:meth:`set_apps` or :py:meth:`load_apps` """
-    operations: Optional[list[AbstractOperation]] = Field(exclude=True, default_factory=list)
-    """ The operations generated by :py:meth:`set_apps`. """
-
-    operation_id = "apps_plan"
-
-    app_plan_class: Type[AppPlan] = AppPlan
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        if self.pre_operations is None:
-            self.pre_operations = []  # type(self).pre_operations or []
-        if self.post_operations is None:
-            self.post_operations = []  # type(self).post_operations or []
-
-        self.operations = None
-
-    @root_validator(pre=True)
-    def validate_forbidden_fields(cls, values):
-        """Forbid operations to be provided"""
-        if values.get("operations"):
-            raise ValueError(
-                "You are not allowed to set `operations` on AppsPlan; use `app_plans`, `pre_operations`,"
-                "`post_operations` instead"
-            )
-        if values.get("apps"):
-            raise ValueError("You are not allowed to set `apps` on AppsPlan; use `set_apps` or " "`load_apps`.")
-        return values
-
-    def set_apps(self, apps):
-        self.apps = apps
-        self.operations = self.get_operations()
-
-    def get_operations(self):
-        return self.pre_operations + [self.get_app_plan(app) for app in self.apps] + self.post_operations
-
-    def get_app_plan(self, app: AppMetadata, **kwargs):
-        kwargs["operations"] = self.app_operations or []
-        return self.app_plan_class(app=app, **kwargs)
-
-    def load_apps(self, registry: AppRegistry, names: list[str], clone: bool = True) -> AppsPlan:
+    def get_operations(self, state: OperationState) -> Generator[AbstractOperation]:
         """
-        Load applications and their dependencies from registry and set them
-        on instance.
+        Return operations handled by the plan (for apply and rollback).
 
-        When ``clone`` is True (default behavior), the applications are loaded
-        into a copy of self instead of modifying instance inplace.
+        :param state: the state for the current plan operation.
         """
-        apps = registry.get_full(names)
-        if clone:
-            self = self.clone()
-        self.set_apps(apps)
-        return self
+        yield from iter(self.operations)

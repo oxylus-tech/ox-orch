@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from django_installer.core import registry
 from django_installer.core.apps import AppMetadata
 
 
@@ -49,6 +50,12 @@ def app_dep_1(app_meta, app_dep):
 @pytest.fixture
 def app_metas(app_meta, app_meta_1, app_dep, app_dep_1):
     return [app_meta, app_meta_1, app_dep, app_dep_1]
+
+
+@pytest.fixture
+def mem_registry(app_metas):
+    # enforce misordering for iteration and search tests
+    return registry.MemoryAppRegistry(apps=list(reversed(app_metas)))
 
 
 @pytest.fixture
