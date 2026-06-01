@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Generator
+from typing import Annotated, Generator, Iterable
 from pydantic import Field, field_validator
 
 from .base import OperationState, Status, AbstractOperation
@@ -17,11 +17,6 @@ class PlanState(OperationState):
 
     __type_id__ = "state:op:plan"
 
-    children: list[OperationState] = Field(default_factory=list)
-    """ Executed children operation states. """
-    operation_ids: list[AbstractOperation] = Field(default_factory=list)
-    """ Executed operation ids. """
-
     def get_resume_index(self) -> int:
         """Return resume index."""
         return next((i for i, child in enumerate(self.children) if not child.is_completed), len(self.children))
@@ -35,7 +30,7 @@ class Plan(AbstractOperation):
     generated dynamically by overrding :py:meth:`get_operations`.
     """
 
-    operations: Annotated[list[AbstractOperation], Field(subclass_ok=True)]
+    operations: Annotated[list[AbstractOperation], Field(subclass_ok=True)] = Field(default_factory=list)
     """ The operations to run. """
     __type_id__ = "op:plan"
     _state_class = PlanState
@@ -108,17 +103,19 @@ class Plan(AbstractOperation):
             operations = operations[:applied_count]
 
         for op, op_state in zip(reversed(operations), reversed(states)):
-            if op_state.is_any(Status.COMPLETED, Status.RUNNING):
+            if op_state.is_any(Status.COMPLETED, Status.RUNNING, Status.FAILED):
                 yield from op.rollback(op_state, **context)
 
     def get_context(self, state, **context):
         context["plan"] = self
         return super().get_context(state, **context)
 
-    def get_operations(self, state: OperationState) -> Generator[AbstractOperation]:
+    def get_operations(self, state: OperationState) -> Iterable[AbstractOperation]:
         """
         Return operations handled by the plan (for apply and rollback).
+        This function MUST be deterministic and coherent between
+        calls to avoid incoherent and broken states.
 
         :param state: the state for the current plan operation.
         """
-        yield from iter(self.operations)
+        return self.operations

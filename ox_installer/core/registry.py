@@ -7,11 +7,13 @@ from django.utils.translation import gettext as __
 from pydantic import BaseModel, Field, PrivateAttr
 
 from . import files
-from .apps import AppID, AppMetadata, resolve_install_order
+from .apps import AppID, AppMetadata, AppInstallState, resolve_install_order
 
 
 __all__ = (
     "NotFoundError",
+    "AppStateUpdate",
+    "AppStateDiffs",
     "AppDict",
     "AppRegistry",
     "MemoryAppRegistry",
@@ -29,6 +31,74 @@ class NotFoundError(Exception):
 
 AppDict = dict[str, AppMetadata]
 """ AppMetadata as a dict of ``app_id: AppMetadata``. """
+
+AppStateUpdate = dict[str, Any]
+
+
+class AppStateDiffs(BaseModel):
+    """
+    Provide applications' state diff support.
+    """
+
+    backward: dict[AppID, AppStateUpdate] = Field(default_factory=dict)
+    """ Initial application states. """
+    forward: dict[AppID, AppStateUpdate] = Field(default_factory=dict)
+    """ Application states updates to commit on success. """
+
+    def add_update(self, app, **changes):
+        """
+        Register a reversible update.
+
+        This stores:
+        - forward patch (apply)
+        - inverse patch (rollback)
+
+        :param app: the application being updated;
+        """
+        state = getattr(app, "state", None)
+        forward, backward = {}, {}
+
+        for key, new_value in changes.items():
+            old_value = getattr(state, key, None) if state else None
+
+            forward[key] = new_value
+            backward[key] = old_value
+
+        # merge forward and backward
+        self.forward.setdefault(app.id, {}).update(forward)
+        self.backward.setdefault(app.id, {}).update(backward)
+
+    def validate_diffs(self):
+        """
+        Validate diff provide coherent state transition.
+
+        :yield ValueError: validation failed.
+        """
+        backward_ids = set(self.backward.keys())
+        forward_ids = set(self.forward.keys())
+
+        if forward_ids != backward_ids:
+            in_backward = {app_id for app_id in backward_ids if app_id not in forward_ids}
+            in_forward = {app_id for app_id in forward_ids if app_id not in backward_ids}
+
+            raise ValueError(
+                "Some apps ids are referenced in backward or forward but not present on the other side.\n"
+                f"- In backward: {', '.join(in_backward)}\n"
+                f"- In forward: {', '.join(in_forward)}"
+            )
+
+        errors = []
+        for app_id, bw_values in self.backward.items():
+            fw_values = self.forward.get(app_id)
+            if fw_values.keys() != bw_values.keys():
+                fields = set(fw_values.keys()) ^ set(bw_values.keys())
+                errors.append(f"{app_id}: {', '.join(fields)}")
+
+        if errors:
+            raise ValueError(
+                "Some application have unmatched fields between backward and forward:\n"
+                + "\n".join(f"- {err}" for err in errors)
+            )
 
 
 class AppRegistry:
@@ -83,24 +153,33 @@ class AppRegistry:
         """
         pass
 
-    def commit(self, updates: dict[AppID, dict[str, Any]], exc: bool = False) -> list[AppMetadata]:
+    @abstractmethod
+    def commit(self, updates: dict[AppID, dict[str, Any]], exc: bool = False):
         """
         Update application state.
 
+        Apps MUST exists in the registry to be taken in account.
+
         .. code-block:: python
 
-            registry.update({
+            registry.commit({
                 "my.app": {
                     "installed_version": "1.2.0",
                     "last_migration": "0004_auto",
                 }
             })
 
-        Default implementation only update applications' data and return an
-        updated version of it (apps are retrieved using :py:meth:`get_all`).
-
         :param updates: a dict (by app id) of fields to update;
-        :returns: a list of updated AppMetadata
+        :param exc: raise NotFoundError when an app is not registered.
+        """
+
+    def apply_commit(self, updates: dict[AppID, dict[str, Any]], exc: bool = False) -> list[AppMetadata]:
+        """
+        Return application with their state updated using provided commit.
+
+        It DOES NOT store the updated version, only apply the changes.
+
+        Arguments are the same than :py:meth:`commit`.
         """
         if not updates:
             return []
@@ -108,8 +187,16 @@ class AppRegistry:
         apps = self.get_all(updates.keys(), exc=exc)
         for app in apps:
             update = updates.get(app.id)
-            for key, value in update.items():
-                setattr(app, key, value)
+
+            # ensure missing fields are set
+            if "installed_version" not in update:
+                update["installed_version"] = app.get_installed_version()
+
+            if app.state is None:
+                app.state = AppInstallState(**update)
+            else:
+                for key, value in update.items():
+                    setattr(app.state, key, value)
         return apps
 
     # ---- implementated methods
@@ -164,7 +251,7 @@ class MemoryAppRegistry(AppRegistry, BaseModel):
 
     def get(self, app_id: AppID, exc: bool = False):
         if app := self.apps.get(app_id):
-            return app
+            return app.clone()
         elif exc:
             raise NotFoundError([app_id])
 
@@ -175,7 +262,7 @@ class MemoryAppRegistry(AppRegistry, BaseModel):
         apps, missings = [], []
         for app_id in app_ids:
             if app := self.get(app_id):
-                apps.append(app)
+                apps.append(app.clone())
             elif exc:
                 missings.append(app_id)
 
@@ -204,7 +291,7 @@ class MemoryAppRegistry(AppRegistry, BaseModel):
                     dependents.add(dependent)
                     to_visit.append(dependent.id)
 
-        return list(dependents)
+        return [d.clone() for d in dependents]
 
     def search(self, **lookups):
         items = {}
@@ -223,7 +310,11 @@ class MemoryAppRegistry(AppRegistry, BaseModel):
                     if any(v in attr for v in search):
                         items[app.id] = app
                         continue
-        return list(items.values())
+        return [item.clone() for item in items.values()]
+
+    def commit(self, updates: dict[AppID, dict[str, Any]], exc: bool = False) -> list[AppMetadata]:
+        apps = self.apply_commit(updates, exc)
+        self.apps.update({app.id: app for app in apps})
 
 
 class FileAppRegistry(MemoryAppRegistry):

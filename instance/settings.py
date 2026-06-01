@@ -23,7 +23,7 @@ SECRET_KEY = "django-insecure-bg*enkwcea%4xjcvkpbb_h@6#ue78#t1q(z^w@faagal7**^9i
 
 # Application definition
 INSTALLED_APPS = [
-    "django_filters",
+    # "django_filters",
     "rest_framework",
     "django.contrib.admin",
     "django.contrib.auth",

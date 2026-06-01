@@ -3,10 +3,10 @@ from typing import Callable, Generator, ClassVar
 
 from django.utils.translation import gettext_lazy as _
 
-from django_installer.utils import CloneBaseModel, LazyTranslation, PolymorphicModel
+from ox_installer.utils import CloneBaseModel, LazyTranslation, PolymorphicModel
 
-from ..apps import AppMetadata
-from ..state import State, Status
+from ..core.apps import AppMetadata
+from ..core.state import State, Status
 
 
 __all__ = (
@@ -40,14 +40,14 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
 
     The :py:meth:`apply` and :py:meth:`rollback` are the two main entry points
     for executing the operation. It handles state handling, rollback on failure
-    (apply), and yield :py:class:`~django_installer.core.state.base.OperationState` updates.
+    (apply), and yield :py:class:`~ox_installer.core.state.base.OperationState` updates.
 
     Implementator will implement the actual operation calls inside :py:meth:`_apply`
     and :py:meth:`_rollback`. Those can be regular method or a OperationState generator.
 
     .. note::
 
-        For the class to be serializable/deserializable, set :py:attr:`django_installer.utils.PolymorphicModel`. The value is namespaced
+        For the class to be serializable/deserializable, set :py:attr:`ox_installer.utils.PolymorphicModel`. The value is namespaced
         under ``op:``:
 
         .. code-block:: python
@@ -65,15 +65,12 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
 
     def create_state(self, **kwargs) -> OperationState:
         """Return a new initial operation state."""
-        try:
-            return self._state_class(
-                operation_id=type(self).__type_id__,
-                _operation=self,
-                name=str(type(self).label or type(self).__type_id__),
-                **kwargs,
-            )
-        except Exception:
-            breakpoint()
+        return self._state_class(
+            operation_id=type(self).__type_id__,
+            _operation=self,
+            name=str(type(self).label or type(self).__type_id__),
+            **kwargs,
+        )
 
     def validate_state(self, state: OperationState):
         """Validate provided state agains't this operation.
@@ -82,7 +79,7 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
         """
         if not isinstance(state, self._state_class):
             raise TypeError(
-                "Invalid type of state for this operation. Expected {self._state_class} " "but we've got {type(state)}"
+                f"Invalid type of state for this operation. Expected {self._state_class} " "but we've got {type(state)}"
             )
         if not state._operation and state.operation_id == type(self).__type_id__:
             state._operation = self
@@ -106,9 +103,9 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
             yield state.start()
 
             if inspect.isgeneratorfunction(self._apply):
-                yield from self._apply(state=state, **context)
+                yield from self._apply(**context)
             else:
-                self._apply(state=state, **context)
+                self._apply(**context)
 
             yield state.finish()
         except Exception as exc:
@@ -130,9 +127,9 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
             yield state.rolling_back()
 
             if inspect.isgeneratorfunction(self._rollback):
-                yield from self._rollback(state=state, **context)
+                yield from self._rollback(**context)
             else:
-                self._rollback(state=state, **context)
+                self._rollback(**context)
 
             yield state.rolled_back()
         except Exception as exc:

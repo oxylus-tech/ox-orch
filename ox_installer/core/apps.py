@@ -1,12 +1,13 @@
 from __future__ import annotations
 from datetime import datetime
+from enum import Enum
+from importlib import metadata
 from graphlib import TopologicalSorter
 from typing import TypeAlias
 
-from django.db.models import TextChoices
-from django.utils.translation import gettext_lazy as _
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from ox_installer.utils import CloneBaseModel
 from . import state
 from .state import Status
 
@@ -18,7 +19,7 @@ AppID: TypeAlias = str
 """ Application ID """
 
 
-class AppMetadata(BaseModel):
+class AppMetadata(CloneBaseModel):
     """
     Standardized and generic application metadata.
 
@@ -49,22 +50,27 @@ class AppMetadata(BaseModel):
     state: AppInstallState | None = None
     """ Current application install state. """
 
+    def get_installed_version(self) -> str | None:
+        """Return installed version read from environment metadata."""
+        try:
+            return metadata.version(self.package)
+        except metadata.PackageNotFoundError:
+            return None
+
     def __hash__(self):
         return hash(self.id)
 
 
-class InstallOrigin(TextChoices):
-    USER = "user", _("Installed by user")
-    DEPENDENCY = "dependency", _("Installed as dependency")
+class InstallOrigin(Enum):
+    USER = "user"
+    DEPENDENCY = "dependency"
 
 
 class AppInstallState(state.State):
     """Application installation state."""
 
-    version: str
-    """ Application version. """
     installed_version: str
-    """ Installed version of the application. """
+    """ Application installed version. """
     origin: InstallOrigin = InstallOrigin.USER
     """ Install reason """
     installed_at: datetime | None = None

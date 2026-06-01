@@ -1,7 +1,7 @@
 from django.utils import timezone as tz
 import pytest
 
-from django_installer.core.state import Status, StateInfo, State, StateYAMLBackend
+from ox_installer.core.state import Status, StateInfo, State, StateYAMLBackend
 
 
 @pytest.fixture
@@ -97,8 +97,8 @@ class TestState:
 
 
 class TestStateFileBackend:
-    def test_save_load(self, state_file_backend, yaml_file, apps_plan):
-        state = apps_plan.create_state()
+    def test_save_load(self, state_file_backend, yaml_file, op):
+        state = op.create_state()
         state.status = Status.FAILED
         state_file_backend.save(state, yaml_file)
         assert yaml_file.exists()

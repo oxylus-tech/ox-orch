@@ -10,6 +10,29 @@ readme = "README.rst"
 license = "GPL-3.0-or-later"
 
 dynamic = ["version"]
+dependencies = [
+    "pydantic>=2.13.4",
+    "pyyaml>=6.0.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=26.5.1",
+    "ipython>=9.14.0",
+    "pre-commit>=4.6.0",
+    "pytest>=9.0.3",
+    "pytest-django>=4.12.0",
+    "ruff>=0.15.15",
+]
+docs = [
+    "sphinx>=9.1.0",
+    "sphinx-autodoc-typehints>=3.10.4",
+    "sphinx-rtd-theme>=3.1.0",
+]
+django = [
+    "django>=6.0.5",
+    "djangorestframework>=3.17.1",
+]
 
 
 [tool.poetry]
@@ -33,37 +56,6 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.11",
 ]
-
-
-[tool.poetry.dependencies]
-python = "^3.13"
-Django = "^5"
-djangorestframework = "^3"
-django-filter = "*"
-pyyaml = "^6.0"
-pydantic = "^2.12"
-
-
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-ipython = "*"
-pre-commit = "*"
-black = "*"
-ruff = "*"
-pytest = "*"
-pytest-django = "*"
-
-
-[tool.poetry.group.docs]
-optional = true
-
-[tool.poetry.group.docs.dependencies]
-Sphinx = "*"
-# sphinx-js = "*"
-sphinx-rtd-theme = "*"
-sphinx-autodoc-typehints = "*"
 
 
 [tool.pytest.ini_options]

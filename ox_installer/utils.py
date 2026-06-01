@@ -1,17 +1,51 @@
 from copy import deepcopy
-from typing import Any
+from typing import Any, Iterable
 
-from django.utils.functional import Promise
 from pydantic import BaseModel, model_serializer
 from pydantic._internal._model_construction import ModelMetaclass
 
 
 __all__ = (
+    "merge_nested_dicts",
+    "consume_iter",
     "CloneBaseModel",
     "model_registry",
     "PolymorphicModel",
     "LazyTranslation",
 )
+
+
+def merge_nested_dicts(*dicts: Iterable[dict[Any, dict[Any, Any]]]) -> dict[Any, dict[Any, Any]]:
+    """
+    Merge multiple dict of dicts by keys.
+
+    .. code-block:: python
+
+        a = {"a": {"foo": 123, "bar": 234}, "b": {"foo": 234}}
+        b = {"a": {"foo": 456}, "b": {"tee": 4567}}
+
+        assert merge_nested_dicts(a, b) == {
+            "a": {"foo": 456, "bar": 234},
+            "b": {"foo": 234, "tee": 4567}
+        }
+
+    """
+    result = {}
+    for parent_dict in dicts:
+        for key, child_dict in parent_dict.items():
+            assert isinstance(child_dict, dict)
+
+            if key not in result:
+                result[key] = dict(child_dict)
+            else:
+                result[key].update(child_dict)
+    return result
+
+
+def consume_iter(iterator):
+    """Consume iterator."""
+    for _ in iterator:
+        pass
 
 
 class CloneBaseModel(BaseModel):
@@ -138,6 +172,8 @@ class LazyTranslation:
     """
     This allows to pass down a lazy translation string as pydantic field.
 
+    Example using Django:
+
     .. code-block:: python
 
         from django.utils.translation import gettext_lazy as _
@@ -158,7 +194,7 @@ class LazyTranslation:
         from pydantic_core import core_schema
 
         def validate(v: Any):
-            if isinstance(v, (str, Promise)):
+            if isinstance(v, str) or hasattr(v, "__str__"):
                 return v
             raise ValueError("Expected str or Django lazy translation")
 

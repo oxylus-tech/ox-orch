@@ -1,7 +1,7 @@
 import pytest
 
 
-from django_installer.core.registry import NotFoundError, FileAppRegistry
+from ox_installer.core.registry import NotFoundError, FileAppRegistry
 
 
 @pytest.fixture
@@ -34,7 +34,9 @@ class TestMemoryAppRegistry:
         assert all(k == v.id for k, v in mem_registry.apps.items())
 
     def test_get(self, mem_registry, app_meta):
-        assert mem_registry.get(app_meta.id) is app_meta
+        app = mem_registry.get(app_meta.id)
+        # enforce cloning over using the same object
+        assert app == app_meta and app is not app_meta
 
     def test_get_failed_raises_not_found(self, mem_registry, app_meta):
         with pytest.raises(NotFoundError):

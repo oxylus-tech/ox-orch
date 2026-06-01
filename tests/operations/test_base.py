@@ -1,7 +1,7 @@
 import pytest
 
-from django_installer.core.operations import RunPython
-from django_installer.core.state import Status
+from ox_installer.operations import RunPython
+from ox_installer.core.state import Status
 
 from .conftest import apply, rollback, assert_states
 

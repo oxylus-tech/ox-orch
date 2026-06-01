@@ -1,10 +1,10 @@
 from typing import Generator, Optional
 
-from ..state import StateBackend, Status
+from ..core.state import StateBackend, Status
 
 from .base import OperationState, AbstractOperation, RunPython
 from .plan import Plan
-from .apps_plan import AppPlanState, AppPlan, AppsPlan
+from .apps import AppPlanState, AppPlan, ReconciliationPlan, AppsPlan
 
 
 __all__ = (
@@ -16,6 +16,7 @@ __all__ = (
     "Plan",
     "AppPlan",
     "AppPlanState",
+    "ReconciliationPlan",
     "AppsPlan",
     # re-exports
     "Status",
@@ -72,7 +73,7 @@ def wait(
 
     .. code-block:: python
 
-        from django_installer.core import apply, rollback, wait #, ...
+        from ox_installer.core import apply, rollback, wait #, ...
 
         wait(apply, apps_plan, state_backend)
 

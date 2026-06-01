@@ -163,7 +163,7 @@ class State(StateInfo, utils.PolymorphicModel):
         return "\n".join(lines)
 
     def __str__(self):
-        return f"{self.name} (status={self.status})"
+        return f"{self.name or type(self).__name__} (status={self.status})"
 
 
 class StateBackend:
@@ -206,7 +206,7 @@ class StateBackend:
 class StateFileBackend(StateBackend):
     """Load and save state to provided file path.
 
-    You must provide a :py:class:`~django_installer.core.files.FileBackend`
+    You must provide a :py:class:`~ox_installer.core.files.FileBackend`
     subclass to handle file writing and saving.
     If you're too lazy (which is good), you can use :py:class:`StateYAMLBackend`
     or :py:class:`StateJSONBackend` instead.

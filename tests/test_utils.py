@@ -1,6 +1,6 @@
 import pytest
 
-from django_installer import utils
+from ox_installer import utils
 
 
 class Model(utils.CloneBaseModel, utils.PolymorphicModel):
@@ -31,6 +31,12 @@ def submodel():
 @pytest.fixture
 def unregistered():
     return Unregistered(name="unregistered", value="unregistered value")
+
+
+def test_merge_nested_dicts():
+    a = {"a": {"foo": 123, "bar": 234}, "b": {"foo": 234}}
+    b = {"a": {"foo": 456}, "b": {"tee": 4567}}
+    assert utils.merge_nested_dicts(a, b) == {"a": {"foo": 456, "bar": 234}, "b": {"foo": 234, "tee": 4567}}
 
 
 class TestCloneBaseModel:
