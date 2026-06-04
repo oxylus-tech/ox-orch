@@ -33,7 +33,7 @@ class Plan(AbstractOperation):
     operations: Annotated[list[AbstractOperation], Field(subclass_ok=True)] = Field(default_factory=list)
     """ The operations to run. """
     __type_id__ = "op:plan"
-    _state_class = PlanState
+    __state_class__ = PlanState
 
     def create_state(self, **kwargs) -> OperationState:
         kwargs["children"] = []

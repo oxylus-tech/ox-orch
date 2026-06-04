@@ -4,10 +4,10 @@ from importlib import metadata
 import pytest
 from pydantic import PrivateAttr
 
-from ox_installer.core import registry, files, state
-from ox_installer.core.apps import AppMetadata, AppInstallState
-from ox_installer.operations import AbstractOperation
-from ox_installer.operations.python import InstallOperation
+from ox_orch.core import registry, files, state
+from ox_orch.core.apps import AppMetadata, AppInstallState
+from ox_orch.operations import AbstractOperation
+from ox_orch.operations.install import InstallOperation
 
 
 # We need real package names though their dependencies relationship here are fake.
@@ -26,12 +26,12 @@ class Operation(AbstractOperation):
     rollbacked: bool = False
     __type_id__ = "op:test:operation"
 
-    def _apply(self, exc=None, **kw):
+    def _apply(self, state, exc=None, **kw):
         if exc:
             raise exc
         self.applied = True
 
-    def _rollback(self, rexc=None, **kw):
+    def _rollback(self, state, rexc=None, **kw):
         if rexc:
             raise rexc
         self.rollbacked = True
@@ -46,13 +46,13 @@ class FakeInstall(InstallOperation):
         super().__init__(**kwargs)
         self._called = False
 
-    def install(self, *args):
-        pass
+    def install(self, state, packages, **kwargs):
+        self._last_install = (packages, kwargs)
 
-    def uninstall(self, *args):
-        pass
+    def uninstall(self, state, packages, **_):
+        self._last_uninstall = packages
 
-    def _get_versions_diff(self, apps):
+    def _snapshot(self, apps):
         if not self._called:
             versions = package_versions
             self._called = True

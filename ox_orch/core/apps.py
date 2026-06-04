@@ -7,7 +7,7 @@ from typing import TypeAlias
 
 from pydantic import Field
 
-from ox_installer.utils import CloneBaseModel
+from ox_orch.utils import CloneBaseModel
 from . import state
 from .state import Status
 

@@ -2,13 +2,14 @@ from typing import Generator, Optional
 
 from ..core.state import StateBackend, Status
 
-from .base import OperationState, AbstractOperation, RunPython
+from .base import RunContext, OperationState, AbstractOperation, RunPython
 from .plan import Plan
 from .apps import AppPlanState, AppPlan, ReconciliationPlan, AppsPlan
 
 
 __all__ = (
     # Base
+    "RunContext",
     "OperationState",
     "AbstractOperation",
     "RunPython",
@@ -73,7 +74,7 @@ def wait(
 
     .. code-block:: python
 
-        from ox_installer.core import apply, rollback, wait #, ...
+        from ox_orch.core import apply, rollback, wait #, ...
 
         wait(apply, apps_plan, state_backend)
 

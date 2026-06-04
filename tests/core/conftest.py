@@ -1,6 +1,6 @@
 import pytest
 
-from ox_installer.core import files, state
+from ox_orch.core import files, state
 
 
 @pytest.fixture

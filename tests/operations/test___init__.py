@@ -1,7 +1,7 @@
 import pytest
 
-from ox_installer.operations import apply, rollback, wait
-from ox_installer.core.state import Status, StateBackend
+from ox_orch.operations import apply, rollback, wait
+from ox_orch.core.state import Status, StateBackend
 
 
 @pytest.fixture

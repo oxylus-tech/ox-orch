@@ -12,7 +12,17 @@ from .. import utils
 from . import files
 
 
-__all__ = ("State", "StateInfo", "StateBackend", "StateFileBackend", "StateYAMLBackend", "StateJSONBackend")
+__all__ = (
+    "Status",
+    "StateInfo",
+    "State",
+    "HistoryState",
+    "TreeState",
+    "StateBackend",
+    "StateFileBackend",
+    "StateYAMLBackend",
+    "StateJSONBackend",
+)
 
 
 class Status(TextChoices):
@@ -60,20 +70,12 @@ class State(StateInfo, utils.PolymorphicModel):
     """ Current status. """
     name: str = ""
     """ State name, """
-    error: Optional[str] = None
+    error: str | None = None
     """ Error string (on failure). """
-    updated: Optional[datetime] = Field(default_factory=tz.now)
+    updated: datetime | None = Field(default_factory=tz.now)
     """ Last update datetime. """
-    children: list[State] = Field(default_factory=list)
-    """ Children states. """
-    history: list[StateInfo] = Field(default_factory=list)
-    """ History of state transitions. """
 
-    _parent: Optional[State] = None
-    """ Parent state (set at init). """
-    _root: Optional[State] = None
-    """ Root state (set at init). """
-    _source: Optional[Any] = None
+    _source: Any | None = None
     """ Source path or id, set and used by the backend. """
     _transitions: ClassVar[dict[str, set[str]]] = {
         Status.PENDING: {Status.RUNNING, Status.FAILED},
@@ -84,25 +86,9 @@ class State(StateInfo, utils.PolymorphicModel):
         Status.ROLLED_BACK: {},
     }
     """ Allowed transitions. """
-    _registry_id = "state"
 
     # class Config:
     #    arbitrary_types_allowed = True
-
-    def __init__(self, *args, _root: Optional[State] = None, **kwargs):
-        if _root is None:
-            _root = self
-        super().__init__(*args, _root=_root, **kwargs)
-
-        if self._root is self:
-            self._propagate_root_parent()
-
-    def _propagate_root_parent(self):
-        """Ensure that _root and _parent are correctly set."""
-        for child in self.children:
-            child._parent = self
-            child._root = self._root
-            child._propagate_root_parent()
 
     # ---- Status get
     def is_any(self, *statuses: list[Status]) -> bool:
@@ -118,13 +104,16 @@ class State(StateInfo, utils.PolymorphicModel):
         return self.status in (Status.COMPLETED, Status.FAILED, Status.ROLLED_BACK)
 
     # ---- Status set
-    def set_status(self, status, error: Optional[str | Exception] = None):
-        """Update status (validating transition)."""
-        self.validate_transition(status)
-        self.history.append(StateInfo(status=self.status, error=self.error, updated=self.updated))
+    def set_status(self, status, error: str | Exception | None = None) -> State:
+        """Update status (validating transition).
 
+        :param status: new status to assign.
+        :param error: set error if provided.
+        :returns: self
+        """
+        self.validate_transition(status)
         self.status = status
-        if error:
+        if error is not None:
             self.error = str(error)
         self.updated = tz.now()
         return self
@@ -157,13 +146,91 @@ class State(StateInfo, utils.PolymorphicModel):
     # ---- Generic info & helpers
     def summary(self) -> str:
         """Return a summary of the state (and children)."""
-        if not self.children:
-            return str(self)
-        lines = [f"{self}:"] + ["- " + str(state).replace("\n", "\n  ") for state in self.children]
-        return "\n".join(lines)
+        return str(self)
 
     def __str__(self):
         return f"{self.name or type(self).__name__} (status={self.status})"
+
+
+class HistoryState(State):
+    """
+    Add state transition history capabilities.
+    """
+
+    history: list[StateInfo] = Field(default_factory=list)
+    """ History of state transitions. """
+
+    def set_status(self, status, error: Optional[str | Exception] = None):
+        """Update status (validating transition)."""
+        state_info = StateInfo(status=self.status, error=self.error, updated=self.updated)
+        super().set_status(status, error)
+        self.history.append(state_info)
+        return self
+
+
+class TreeState(State):
+    """
+    A State that actually is a tree state, offering parent-child mechanisms.
+
+    """
+
+    children: list[State] = Field(default_factory=list)
+    """ Children states. """
+
+    _parent: State | None = None
+    """ Parent state (set at init). """
+    _root: State | None = None
+    """ Root state (set at init). """
+
+    def __init__(self, *args, _root: Optional[State] = None, **kwargs):
+        super().__init__(*args, _root=_root, **kwargs)
+
+        if self._parent and self._root is None:
+            self._root = self._parent._root
+        elif self.is_root:
+            self.propagate_parents()
+
+    @property
+    def is_root(self) -> bool:
+        """Return whether this node is root or note."""
+        return self._root is None
+
+    # ---- Status tree
+    def append(self, child, force=False):
+        """
+        Append a new child state to self, ensuring correct parenting.
+
+        To keep the states scope, the child must not be already used on
+        another tree, otherwise it raises a ``ValueError`` -- unless you
+        force it.
+
+        :param child: the child to append.
+        :param force: force child insertion.
+        :raises ValueError: When a child already is assigned to another tree.
+        """
+        if child._parent not in (None, self) and child._root not in (None, self):
+            if not force:
+                raise ValueError("Child is already in another state tree.")
+
+        self.children.append(child)
+
+    def propagate_parents(self):
+        """
+        Ensure that _root and _parent are correctly set.
+
+        Note that each child's method will be called recursively.
+        """
+        for child in self.children:
+            child._parent = self
+            child._root = self._root
+            child._propagate_root_parent()
+
+    def summary(self) -> str:
+        """Return a summary of the state (and children)."""
+        if not self.children:
+            return super().summary()
+        lines = [f"{self}:"] + ["- " + str(state).replace("\n", "\n  ") for state in self.children]
+        return "\n".join(lines)
 
 
 class StateBackend:
@@ -206,7 +273,7 @@ class StateBackend:
 class StateFileBackend(StateBackend):
     """Load and save state to provided file path.
 
-    You must provide a :py:class:`~ox_installer.core.files.FileBackend`
+    You must provide a :py:class:`~ox_orch.core.files.FileBackend`
     subclass to handle file writing and saving.
     If you're too lazy (which is good), you can use :py:class:`StateYAMLBackend`
     or :py:class:`StateJSONBackend` instead.

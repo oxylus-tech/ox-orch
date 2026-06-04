@@ -1,4 +1,4 @@
-from ox_installer.utils import LazyTranslation
+from ox_orch.utils import LazyTranslation
 from .base import AbstractOperation
 
 
@@ -44,6 +44,9 @@ class Migrations(AbstractOperation):
     Apply Django migrations incrementally.
     """
 
+    __apply_spec__ = ("app",)
+    __rollback_spec__ = ("app",)
+
     name: str = "migrations"
     label: LazyTranslation = _("Run app migrations")
 
@@ -51,7 +54,7 @@ class Migrations(AbstractOperation):
         recorder = DJANGO.MigrationRecorder(DJANGO.connections["default"])
         return recorder.applied_migrations()
 
-    def _apply(self, app):
+    def _apply(self, state, app):
         if DJANGO is None:
             return
 
@@ -62,7 +65,7 @@ class Migrations(AbstractOperation):
 
         DJANGO.call_command("migrate", app.id, verbosity=1)
 
-    def _rollback(self, app):
+    def _rollback(self, state, app):
         """
         Rollback migrations to previous state.
         """
@@ -78,18 +81,21 @@ class ManageCommand(AbstractOperation):
     Run a generic manage.py command.
     """
 
+    __apply_spec__ = ("app",)
+    __rollback_spec__ = ("app",)
+
     command: str
     args: list[str] = []
     name: str = "manage"
     label: LazyTranslation = _("Manage command")
 
-    def _apply(self, app):
+    def _apply(self, state, app):
         if DJANGO is None:
             return
 
         DJANGO.call_command(self.command, *self.args)
 
-    def _rollback(self, app):
+    def _rollback(self, state, app):
         """
         Generic rollback is undefined.
         Caller decides if safe or not.
@@ -99,11 +105,14 @@ class ManageCommand(AbstractOperation):
 
 
 class CollectStatic(ManageCommand):
+    __apply_spec__ = ("app",)
+    __rollback_spec__ = ("app",)
+
     command: str = "collectstatic"
     name: str = "manage:collectstatic"
     label: LazyTranslation = _("Collect Static Files")
 
-    def _apply(self, app):
+    def _apply(self, state, app):
         if DJANGO is None:
             return
 
@@ -113,5 +122,5 @@ class CollectStatic(ManageCommand):
             verbosity=1,
         )
 
-    def _rollback(self, app):
+    def _rollback(self, state, app):
         pass

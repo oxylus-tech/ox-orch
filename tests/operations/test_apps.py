@@ -1,7 +1,7 @@
 import pytest
 
-from ox_installer.utils import consume_iter
-from ox_installer.core.state import Status
+from ox_orch.utils import consume_iter
+from ox_orch.core.state import Status
 
 from ..conftest import package_versions, package_next_versions
 

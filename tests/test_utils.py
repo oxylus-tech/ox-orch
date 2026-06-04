@@ -1,6 +1,6 @@
 import pytest
 
-from ox_installer import utils
+from ox_orch import utils
 
 
 class Model(utils.CloneBaseModel, utils.PolymorphicModel):

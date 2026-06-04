@@ -1,6 +1,6 @@
 import pytest
 
-from ox_installer.core.state import Status
+from ox_orch.core.state import Status
 
 from .conftest import apply, rollback, assert_states
 

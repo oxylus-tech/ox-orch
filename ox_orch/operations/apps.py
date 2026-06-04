@@ -48,9 +48,10 @@ class AppPlan(Plan):
         - ``app_state``: the state of the AppPlan
     """
 
-    app: Optional[AppMetadata] = None
     __type_id__ = "op:reconciliation"
-    _state_class = AppPlanState
+    __state_class__ = AppPlanState
+
+    app: Optional[AppMetadata] = None
 
     def create_state(self, **kwargs):
         return super().create_state(
@@ -82,7 +83,9 @@ class ReconciliationPlan(AbstractOperation):
     """
 
     __type_id__ = "op:reconciliation_plan"
-    _state_class = ReconciliationState
+    __state_class__ = ReconciliationState
+    __apply_spec__ = ("apps",)
+    __rollback_spec__ = ("apps",)
 
     app_plan: AppPlan
 
@@ -148,6 +151,8 @@ class AppsPlan(Plan):
     """
 
     __type_id__ = "op:apps_plan"
+    __apply_spec__ = {"apps": (list, None), "registry": (AppRegistry, None)}
+    __rollback_spec__ = {"apps": (list, None), "registry": (AppRegistry, None)}
 
     install: AbstractOperation
     """ Installation plan (as PipInstall). """

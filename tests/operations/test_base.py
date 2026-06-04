@@ -1,7 +1,7 @@
 import pytest
 
-from ox_installer.operations import RunPython
-from ox_installer.core.state import Status
+from ox_orch.operations import RunPython
+from ox_orch.core.state import Status
 
 from .conftest import apply, rollback, assert_states
 
@@ -15,8 +15,8 @@ def op_state(op):
 def pyop():
     return RunPython(
         operation_id="test",
-        forward=lambda obj, **kw: obj.__dict__.update({"forwarded": True}),
-        backward=lambda obj, **kw: obj.__dict__.update({"backwarded": True}),
+        forward=lambda obj, *_, **__: obj.__dict__.update({"forwarded": True}),
+        backward=lambda obj, *_, **__: obj.__dict__.update({"backwarded": True}),
     )
 
 
@@ -84,6 +84,67 @@ class TestAbstractOperation:
                 (op.__type_id__, Status.FAILED, str(exc)),
             ],
         )
+
+    # ---- Test context passthrough
+    def test_context_passthrough_when_spec_none(self, op):
+        context = {"a": 1, "b": 2, "c": 3}
+
+        resolved = op._resolve_context(context, None, phase="apply")
+
+        assert resolved == context
+
+    def test_context_tuple_filters_keys(self, op):
+        context = {"a": 1, "b": 2, "c": 3}
+
+        op.__apply_spec__ = ("a", "c")
+
+        resolved = op._resolve_context(context, op.__apply_spec__, phase="apply")
+
+        assert resolved == {"a": 1, "c": 3}
+
+    def test_context_tuple_missing_key_raises(self, op):
+        context = {"a": 1}
+
+        op.__apply_spec__ = ("a", "missing")
+
+        with pytest.raises(KeyError):
+            op._resolve_context(context, op.__apply_spec__, phase="apply")
+
+    def test_context_typed_validation_success(self, op):
+        context = {"registry": {"ok": True}, "apps": [1, 2, 3]}
+
+        op.__apply_spec__ = {
+            "registry": dict,
+            "apps": list,
+        }
+
+        resolved = op._resolve_context(context, op.__apply_spec__, phase="apply")
+
+        assert resolved == context
+
+    def test_context_typed_validation_type_error(self, op):
+        context = {"registry": "invalid"}
+
+        op.__apply_spec__ = {
+            "registry": dict,
+        }
+
+        with pytest.raises(TypeError):
+            op._resolve_context(context, op.__apply_spec__, phase="apply")
+
+    def test_context_rollback_spec_isolated(self, op):
+        apply_context = {"registry": {"x": 1}, "apps": [1]}
+        rollback_context = {"registry": {"x": 1}}
+
+        op.__apply_spec__ = ("registry", "apps")
+        op.__rollback_spec__ = ("registry",)
+
+        apply_resolved = op._resolve_context(apply_context, op.__apply_spec__, phase="apply")
+        rollback_resolved = op._resolve_context(rollback_context, op.__rollback_spec__, phase="rollback")
+
+        assert "apps" in apply_resolved
+        assert "apps" not in rollback_resolved
+        assert "registry" in rollback_resolved
 
 
 class TestRunPython:

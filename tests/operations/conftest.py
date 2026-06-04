@@ -3,8 +3,8 @@ from typing import Optional
 import pytest
 
 from ..conftest import Operation, FakeInstall
-from ox_installer.core import state
-from ox_installer.operations import Plan, AppPlan, ReconciliationPlan, AppsPlan
+from ox_orch.core import state
+from ox_orch.operations import Plan, AppPlan, ReconciliationPlan, AppsPlan
 
 
 def apply(op, state, **kwargs):

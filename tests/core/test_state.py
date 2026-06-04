@@ -1,7 +1,11 @@
 from django.utils import timezone as tz
 import pytest
 
-from ox_installer.core.state import Status, StateInfo, State, StateYAMLBackend
+from ox_orch.core.state import Status, StateInfo, TreeState, HistoryState, StateYAMLBackend
+
+
+class FullState(TreeState, HistoryState):
+    pass
 
 
 @pytest.fixture
@@ -18,7 +22,7 @@ def state_file_backend():
 
 @pytest.fixture
 def state():
-    return State(name="test state")
+    return FullState(name="test state")
 
 
 class TestState:
@@ -88,7 +92,7 @@ class TestState:
         assert state.summary() == f"{state.name} (status={state.status})"
 
     def test_summary_with_nested_states(self, state):
-        state.children = [State(name="foo", status=Status.RUNNING), State(name="bar")]
+        state.children = [FullState(name="foo", status=Status.RUNNING), FullState(name="bar")]
         assert state.summary() == (
             f"{state.name} (status={state.status}):\n"
             f"- foo (status={Status.RUNNING})\n"

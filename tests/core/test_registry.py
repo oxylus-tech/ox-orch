@@ -1,7 +1,7 @@
 import pytest
 
 
-from ox_installer.core.registry import NotFoundError, FileAppRegistry
+from ox_orch.core.registry import NotFoundError, FileAppRegistry
 
 
 @pytest.fixture
