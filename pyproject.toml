@@ -1,6 +1,6 @@
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+#[build-system]
+#requires = ["poetry-core"]
+#build-backend = "poetry.core.masonry.api"
 
 
 [project]
@@ -8,12 +8,26 @@ name = "django-installer"
 description = "Define application installation workflow, and allow users to install them."
 readme = "README.rst"
 license = "GPL-3.0-or-later"
+version = "0.0.1"
 
-dynamic = ["version"]
+# dynamic = ["version"]
+classifiers = [
+    "Framework :: Django",
+    "Framework :: Oxylus",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.11",
+]
+
 dependencies = [
     "pydantic>=2.13.4",
     "pyyaml>=6.0.3",
 ]
+
+[tool.setuptools]
+packages = ["ox_orch"]
+
+[project.scripts]
+ox-orch = "ox_orch.cli.main:cli"
 
 [project.optional-dependencies]
 dev = [
@@ -35,27 +49,20 @@ django = [
 ]
 
 
-[tool.poetry]
-version = "0.0.1"
-authors = ["Thomas Baquet <thomas oxylus app>"]
-packages = [
-    { include = "django_installer" },
-]
-include = [
-    # assets are provided as npm packages
-    # {path="assets", format="sdist"},
-    {path="docs", format="sdist"},
-    {path="tests", format="sdist"},
-]
-exclude = [
-]
-
-classifiers = [
-    "Framework :: Django",
-    "Framework :: Oxylus",
-    "Programming Language :: Python",
-    "Programming Language :: Python :: 3.11",
-]
+# [tool.poetry]
+# version = "0.0.1"
+# authors = ["Thomas Baquet <thomas oxylus app>"]
+# packages = [
+#     { include = "django_installer" },
+# ]
+# include = [
+#     # assets are provided as npm packages
+#     # {path="assets", format="sdist"},
+#     {path="docs", format="sdist"},
+#     {path="tests", format="sdist"},
+# ]
+# exclude = [
+# ]
 
 
 [tool.pytest.ini_options]

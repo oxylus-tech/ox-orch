@@ -4,10 +4,12 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from ..core.state import State
+from pydantic import BaseModel, Field
+
 from ..operations import AbstractOperation, RunContext
-from ..utils import HookEmitter
-from .hooks import ExecutorHook
+from ..hooks import ExecutorHook
+from .events import HookEmitter
+from .state import State
 
 
 __all__ = ("ExecutionError", "Executor")
@@ -20,6 +22,30 @@ class ExecutionError(Exception):
     """
     Raised when an operation execution or rollback fails.
     """
+
+
+class ExecutionSpec(BaseModel):
+    """
+    Full description of an execution request.
+
+    This is the single source of truth for:
+    - operation
+    - state
+    - context
+    - hooks
+    - run metadata
+    """
+
+    operation: str
+    """ Operation import path or __type_id__ reference. """
+    state_path: str | None = None
+    """ Optional persisted state file. """
+    context: dict[str, Any] = Field(default_factory=dict)
+    """ Execution context injected into operations. """
+    hooks: list[str] = Field(default_factory=list)
+    """ Hook class paths to load dynamically. """
+    run_trigger: str = "cli"
+    """ CLI / API / daemon / test. """
 
 
 class Executor(HookEmitter):
