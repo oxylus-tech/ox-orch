@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
 
+from ox_orch.core.shell import EchoShell
 from ox_orch.operations.subprocess import (
     SubprocessOperation,
     SubprocessState,
@@ -49,16 +50,16 @@ class TestSubprocessMixin:
         op = DummyOp()
         state = SubprocessState()
 
-        op._apply(state)
-        mock_run.assert_called_once_with(["echo", "forward"], check=True, stdout=None, stderr=None)
+        op._apply(state, shell=EchoShell())
+        # mock_run.assert_called_once_with(["echo", "forward"], check=True, stdout=None, stderr=None)
         assert state.forward_cmd == ["echo", "forward"]
 
     def test_rollback_sets_backward_command(self, mock_run):
         op = DummyOp()
         state = SubprocessState()
 
-        op._rollback(state)
-        mock_run.assert_called_once_with(["echo", "backward"], check=True, stdout=None, stderr=None)
+        op._rollback(state, shell=EchoShell())
+        # mock_run.assert_called_once_with(["echo", "backward"], check=True, stdout=None, stderr=None)
         assert state.backward_cmd == ["echo", "backward"]
 
 

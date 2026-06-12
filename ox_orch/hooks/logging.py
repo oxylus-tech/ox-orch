@@ -1,12 +1,14 @@
 from __future__ import annotations
 import logging
 
+from ox_orch.core.registry import register
 from .base import ExecutorHook
 
 
 __all__ = ("LoggingHook",)
 
 
+@register("logging")
 class LoggingHook(ExecutorHook):
     """
     Log executor activity using Python's standard logging framework.

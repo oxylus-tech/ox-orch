@@ -1,4 +1,4 @@
-__type_id__: state:op
+__type_id__: operation
 config:
     error: null
     history: []

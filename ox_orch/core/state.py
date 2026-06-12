@@ -1,19 +1,18 @@
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, ClassVar, Optional, Type
 
-from django.db.models import TextChoices
-from django.utils.translation import gettext_lazy as _
-from django.utils import timezone as tz
 from pydantic import Field
 
-from .. import utils
 from . import files
+from .pydantic import CloneBaseModel
 
 
 __all__ = (
     "Status",
+    "STATUS_LABELS",
     "StateInfo",
     "State",
     "HistoryState",
@@ -25,28 +24,43 @@ __all__ = (
 )
 
 
-class Status(TextChoices):
+class Status(StrEnum):
     """The state of an operation.
 
     It is derived from Django's ``TextChoices``, providing labels
     for each choice.
     """
 
-    PENDING = "pending", _("⏸️ Pending")
+    PENDING = "pending"
     """ Operation is awaiting for execution. """
-    RUNNING = "running", _("▶️️ Running")
+    RUNNING = "running"
     """ Operation is running. """
-    ROLLING_BACK = "rolling_back", _("⏪ Rolling back")
+    ROLLING_BACK = "rolling_back"
     """ Rolling back is running. """
-    COMPLETED = "completed", _("✅ Completed")
+    COMPLETED = "completed"
     """ Operation was successfully completed. """
-    FAILED = "failed", _("❌ Failed")
+    FAILED = "failed"
     """ Operation failed. """
-    ROLLED_BACK = "rolled_back", _("❕Rolled back")
+    ROLLED_BACK = "rolled_back"
     """ Operation was successfully rolled-back. """
 
+    @property
+    def label(self):
+        return STATUS_LABELS[self]
 
-class StateInfo(utils.CloneBaseModel):
+
+STATUS_LABELS = {
+    Status.PENDING: "⏸️ Pending",
+    Status.RUNNING: "▶️️ Running",
+    Status.ROLLING_BACK: "⏪ Rolling back",
+    Status.COMPLETED: "✅ Completed",
+    Status.FAILED: "❌ Failed",
+    Status.ROLLED_BACK: "❕Rolled back",
+}
+""" Label for statuses. """
+
+
+class StateInfo(CloneBaseModel):
     """
     Base state informations, as stored in :py:attr:`State.history`.
     """
@@ -59,7 +73,7 @@ class StateInfo(utils.CloneBaseModel):
     """ Last update datetime. """
 
 
-class State(StateInfo, utils.PolymorphicModel):
+class State(StateInfo):
     """
     Generic State interface from which all states are derived.
 
@@ -72,7 +86,7 @@ class State(StateInfo, utils.PolymorphicModel):
     """ State name, """
     error: str | None = None
     """ Error string (on failure). """
-    updated: datetime | None = Field(default_factory=tz.now)
+    updated: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
     """ Last update datetime. """
 
     _source: Any | None = None
@@ -115,7 +129,7 @@ class State(StateInfo, utils.PolymorphicModel):
         self.status = status
         if error is not None:
             self.error = str(error)
-        self.updated = tz.now()
+        self.updated = datetime.now(timezone.utc)
         return self
 
     def validate_transition(self, new_status: str):
@@ -246,6 +260,10 @@ class StateBackend:
     state_class: Type[State] = State
     """ Operation state class to use for loading and instanciating. """
 
+    def __init__(self, state_class: Type[State] | None = None):
+        if state_class is not None:
+            self.state_class = state_class
+
     def load(self, source: Any) -> State | None:
         """
         Load or reload state from the backend.
@@ -279,7 +297,8 @@ class StateFileBackend(StateBackend):
     or :py:class:`StateJSONBackend` instead.
     """
 
-    def __init__(self, backend_class: Type[files.FileBackend]):
+    def __init__(self, backend_class: Type[files.FileBackend], state_class: Type[State] | None = None):
+        super().__init__(state_class)
         self.backend = backend_class(self.state_class)
 
     def load(self, source: Path):
@@ -299,12 +318,12 @@ class StateFileBackend(StateBackend):
 class StateYAMLBackend(StateFileBackend):
     """State backend storing to YAML file."""
 
-    def __init__(self):
-        super().__init__(files.YAMLBackend)
+    def __init__(self, state_class: Type[State] | None = None):
+        super().__init__(files.YAMLBackend, state_class)
 
 
 class StateJSONBackend(StateFileBackend):
     """State backend storing to JSON file."""
 
-    def __init__(self):
-        super().__init__(files.JSONBackend)
+    def __init__(self, state_class: Type[State] | None = None):
+        super().__init__(files.JSONBackend, state_class)

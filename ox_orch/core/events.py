@@ -27,15 +27,16 @@ class HookEmitter:
 
     The hooks must subclass the provided :py:attr:`hook_class`.
 
-    It is aimed as a mixin class, so you'll have to provide initial hooks.
+    It is aimed as a mixin class, so you MUST provide initial hooks and
+    hook_class at init.
     """
 
-    hook_class: Type[Hook] | None = None
+    hook_class: Type[Hook] = Hook
     """ Supported hook class. """
     hooks: list[Hook] = None
     """ The list of hooks. """
 
-    def _emit(self, event: str, **payload: Any):
+    def emit(self, event: str, **payload: Any):
         if not self.hooks:
             return
 
@@ -52,6 +53,6 @@ class HookEmitter:
         if self.hooks is None:
             self.hooks = []
         for hook in hooks:
-            if self.hook_class is not None and not isinstance(hook, self.hook_class):
+            if not isinstance(hook, self.hook_class):
                 raise ValueError(f"Hook {hook} must be a subclass of {self.hook_class.__name__}")
         self.hooks.extend(hook)

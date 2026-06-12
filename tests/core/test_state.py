@@ -1,4 +1,5 @@
-from django.utils import timezone as tz
+from datetime import datetime, timezone
+
 import pytest
 
 from ox_orch.core.state import Status, StateInfo, TreeState, HistoryState, StateYAMLBackend
@@ -17,7 +18,7 @@ def yaml_file(data_dir):
 
 @pytest.fixture
 def state_file_backend():
-    return StateYAMLBackend()
+    return StateYAMLBackend(FullState)
 
 
 @pytest.fixture
@@ -59,7 +60,7 @@ class TestState:
             state.validate_transition(Status.COMPLETED)
 
     def test_start(self, state):
-        now = tz.now()
+        now = datetime.now(timezone.utc)
         state.start()
         assert state.status == Status.RUNNING
         assert state.updated >= now
@@ -70,7 +71,7 @@ class TestState:
         assert state.status == Status.ROLLING_BACK
 
     def test_finish(self, state):
-        now = tz.now()
+        now = datetime.now(timezone.utc)
         state.status = Status.RUNNING
         state.finish()
         assert state.status == Status.COMPLETED
@@ -101,8 +102,7 @@ class TestState:
 
 
 class TestStateFileBackend:
-    def test_save_load(self, state_file_backend, yaml_file, op):
-        state = op.create_state()
+    def test_save_load(self, state_file_backend, yaml_file, state):
         state.status = Status.FAILED
         state_file_backend.save(state, yaml_file)
         assert yaml_file.exists()

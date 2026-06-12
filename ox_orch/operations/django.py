@@ -1,3 +1,4 @@
+from ox_orch.core.registry import register
 from ox_orch.utils import LazyTranslation
 from .base import AbstractOperation
 
@@ -39,6 +40,7 @@ except ImportError:
 __all__ = ("Migrations", "ManageCommand", "CollectStatic")
 
 
+@register("django:migrations")
 class Migrations(AbstractOperation):
     """
     Apply Django migrations incrementally.
@@ -76,6 +78,7 @@ class Migrations(AbstractOperation):
             DJANGO.call_command("migrate", app.id, app.previous_migration, verbosity=1)
 
 
+@register("django:manage")
 class ManageCommand(AbstractOperation):
     """
     Run a generic manage.py command.
@@ -104,6 +107,7 @@ class ManageCommand(AbstractOperation):
         return
 
 
+@register("django:collectstatic")
 class CollectStatic(ManageCommand):
     __apply_spec__ = ("app",)
     __rollback_spec__ = ("app",)

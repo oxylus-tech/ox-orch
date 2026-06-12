@@ -1,7 +1,8 @@
 from pydantic import Field
 
-from ..core.apps import AppID
-from ..core.registry import AppStateDiffs
+from ox_orch.core.apps import AppID
+from ox_orch.core.app_registry import AppStateDiffs
+from ox_orch.core.registry import register
 from .base import OperationState, AbstractOperation
 from .subprocess import SubprocessMixin
 
@@ -9,8 +10,8 @@ from .subprocess import SubprocessMixin
 __all__ = ("InstallState", "InstallOperation", "PipInstall")
 
 
+@register("install")
 class InstallState(AppStateDiffs, OperationState):
-    __type_id__ = "state:op:install"
 
     packages: dict[AppID, str] = Field(default_factory=dict)
     """ Mapping of app id to package names used for installation. """
@@ -20,15 +21,15 @@ class InstallOperation(SubprocessMixin, AbstractOperation):
     """Install packages using pip."""
 
     __state_class__ = InstallState
-    __apply_spec__ = ("apps",)
-    __rollback_spec__ = ("apps",)
+    __apply_spec__ = ("apps", "shell")
+    __rollback_spec__ = ("apps", "shell")
 
     update: bool = True
     """ Update packages. """
     force_reinstall: bool = False
     """ Force reinstall. """
 
-    def _apply(self, state, apps, **context):
+    def _apply(self, state, shell, apps, **context):
         if not apps:
             return
 
@@ -36,23 +37,33 @@ class InstallOperation(SubprocessMixin, AbstractOperation):
         state.packages = {app.id: app.package for app in apps}
 
         options = self.get_install_options()
-        self.install(state, {app.package: app.version for app in apps}, options=options)
 
-        state.forward = self._snapshot(apps)
+        self.log("Install:\n" + "\n".join(f"- {key}=={val}" for key, val in state.packages.items()))
 
-    def _rollback(self, state, **context):
+        if context.get("dry_run"):
+            state.forward = {app.id: {"installed_version": app.version} for app in apps}
+        else:
+            self.install(state, shell, {app.package: app.version for app in apps}, options=options)
+            state.forward = self._snapshot(apps)
+
+    def _rollback(self, state, shell, **context):
         downgrade = {
             state.packages[app_id]: vals["installed_version"]
             for app_id, vals in state.backward.items()
             if vals.get("installed_version") is not None
         }
-        if downgrade:
-            self.install(state, downgrade)
+        self.log("Downgrade to:\n" + "\n".join(f"- {key}=={val}" for key, val in downgrade.items()))
+
+        if not context.get("dry_run") and downgrade:
+            self.install(state, shell, downgrade)
 
         uninstall = [
             state.packages[app_id] for app_id, vals in state.backward.items() if vals.get("installed_version") is None
         ]
-        self.uninstall(state, uninstall)
+        self.log("Remove:\n" + "\n".join(f"- {key}" for key in uninstall))
+
+        if not context.get("dry_run") and uninstall:
+            self.uninstall(state, shell, uninstall)
 
     def get_install_options(self):
         """Build CLI option for installation (forward only)."""
@@ -66,23 +77,22 @@ class InstallOperation(SubprocessMixin, AbstractOperation):
     def _snapshot(self, apps):
         return {app.id: {"installed_version": app.get_installed_version()} for app in apps}
 
-    def install(self, state, packages: dict[str, str], **kwargs):
+    def install(self, state, shell, packages: dict[str, str], **kwargs):
         cmd = self.get_forward(state, packages, **kwargs)
-        self.run(cmd)
+        shell.run(cmd)
 
-    def uninstall(self, state, packages: list[str], **kwargs):
+    def uninstall(self, state, shell, packages: list[str], **kwargs):
         """Uninstall packages.
 
         :param package: list of packages to uninstall.
         """
         cmd = self.get_backward(state, packages, **kwargs)
-        self.run(cmd)
+        shell.run(cmd)
 
 
+@register("install:pip")
 class PipInstall(InstallOperation):
     """Install python packages using Pip."""
-
-    __type_id__ = "op:install:pip"
 
     def get_forward(self, state, packages, options=None, **_):
         cmd = ["pip", "install", *(options or [])]
@@ -92,10 +102,9 @@ class PipInstall(InstallOperation):
         return ["pip", "uninstall", "-y", *packages]
 
 
+@register("install:uv")
 class UvInstall(InstallOperation):
     """Install python packages using UV."""
-
-    __type_id__ = "op:install:uv"
 
     def get_forward(self, state, packages, options=None, **_):
         cmd = ["uv", "pip", "install", *(options or [])]
@@ -105,10 +114,9 @@ class UvInstall(InstallOperation):
         return ["uv", "pip", "uninstall", *packages]
 
 
+@register("install:poetry")
 class PoetryInstall(InstallOperation):
     """Install python packages using Poetry."""
-
-    __type_id__ = "op:poetry_install"
 
     def get_forward(self, state, packages, options=None, **_):
         cmd = ["poetry", "add", *(options or [])]

@@ -5,9 +5,10 @@ from typing import Any, Iterable, Optional
 from pydantic import Field
 
 from ..utils import merge_nested_dicts
-from ..core.apps import AppMetadata
-from ..core.registry import AppRegistry, AppStateDiffs
-from ..core.state import Status
+from ox_orch.core.apps import AppMetadata
+from ox_orch.core.app_registry import AppRegistry, AppStateDiffs
+from ox_orch.core.registry import register
+from ox_orch.core.state import Status
 from .base import AbstractOperation
 from .plan import Plan, PlanState
 
@@ -18,10 +19,9 @@ __all__ = ("AppPlanState", "AppPlan", "ReconciliationPlan", "AppsPlan")
 logger = logging.getLogger()
 
 
+@register("app")
 class AppPlanState(PlanState):
     """State for the AppPlan operation."""
-
-    __type_id__ = "state:op:reconciliation"
 
     app_id: str
     """ Application id. """
@@ -38,6 +38,7 @@ class AppPlanState(PlanState):
     """
 
 
+@register("app")
 class AppPlan(Plan):
     """
     Reconcile a Django application after package installation.
@@ -48,7 +49,6 @@ class AppPlan(Plan):
         - ``app_state``: the state of the AppPlan
     """
 
-    __type_id__ = "op:reconciliation"
     __state_class__ = AppPlanState
 
     app: Optional[AppMetadata] = None
@@ -68,12 +68,14 @@ class AppPlan(Plan):
         return super().get_context(state, **context)
 
 
+@register("reconciliation")
 class ReconciliationState(AppStateDiffs, PlanState):
     """State for the reconciliation of applications."""
 
     pass
 
 
+@register("reconciliation")
 class ReconciliationPlan(AbstractOperation):
     """
     Run reconciliation for the provided applications.
@@ -82,7 +84,6 @@ class ReconciliationPlan(AbstractOperation):
     installed version differs from registry's one.
     """
 
-    __type_id__ = "op:reconciliation_plan"
     __state_class__ = ReconciliationState
     __apply_spec__ = ("apps",)
     __rollback_spec__ = ("apps",)
@@ -139,6 +140,7 @@ class ReconciliationPlan(AbstractOperation):
         return changed
 
 
+@register("apps")
 class AppsPlan(Plan):
     """
     Global application orchestration plan.
@@ -150,7 +152,6 @@ class AppsPlan(Plan):
         - Update registry with the installed versions
     """
 
-    __type_id__ = "op:apps_plan"
     __apply_spec__ = {"apps": (list, None), "registry": (AppRegistry, None)}
     __rollback_spec__ = {"apps": (list, None), "registry": (AppRegistry, None)}
 

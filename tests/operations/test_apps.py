@@ -1,6 +1,7 @@
 import pytest
 
 from ox_orch.utils import consume_iter
+from ox_orch.core.shell import EchoShell
 from ox_orch.core.state import Status
 
 from ..conftest import package_versions, package_next_versions
@@ -29,7 +30,7 @@ class TestReconciliationPlan:
     def test__apply(self, reconciliation, mem_registry, app_dep, app_dep_1, app_meta, app_meta_1):
         apps = [app_dep, app_dep_1]
         state = reconciliation.create_state()
-        consume_iter(reconciliation._apply(state, apps, registry=mem_registry, enable=True))
+        consume_iter(reconciliation._apply(state, apps, shell=EchoShell(), registry=mem_registry, enable=True))
 
         expected_changes = [app_meta, app_meta_1, app_dep]
         resolved_changes = [st.app for st in state.children]
@@ -54,7 +55,7 @@ class TestAppsPlan:
     def test__apply_and_sync_registry(self, apps_plan, mem_registry, app_dep, app_dep_1, app_meta, app_meta_1):
         state = apps_plan.create_state()
         apps = [app_dep, app_dep_1]
-        consume_iter(apps_plan._apply(state, apps, mem_registry, enable=True))
+        consume_iter(apps_plan._apply(state, apps, mem_registry, shell=EchoShell(), enable=True))
 
         app_ids = [a.id for a in apps]
         commit_apps = mem_registry.get_all(app_ids)

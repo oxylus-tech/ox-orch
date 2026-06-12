@@ -4,9 +4,9 @@ from importlib import metadata
 import pytest
 from pydantic import PrivateAttr
 
-from ox_orch.core import registry, files, state
+from ox_orch.core import app_registry, files
 from ox_orch.core.apps import AppMetadata, AppInstallState
-from ox_orch.operations import AbstractOperation
+from ox_orch.operations import AbstractOperation, OperationState
 from ox_orch.operations.install import InstallOperation
 
 
@@ -46,10 +46,10 @@ class FakeInstall(InstallOperation):
         super().__init__(**kwargs)
         self._called = False
 
-    def install(self, state, packages, **kwargs):
+    def install(self, state, shell, packages, **kwargs):
         self._last_install = (packages, kwargs)
 
-    def uninstall(self, state, packages, **_):
+    def uninstall(self, state, shell, packages, **_):
         self._last_uninstall = packages
 
     def _snapshot(self, apps):
@@ -69,12 +69,12 @@ def data_dir():
 
 @pytest.fixture
 def yaml_backend():
-    return files.YAMLBackend(state.State)
+    return files.YAMLBackend(OperationState)
 
 
 @pytest.fixture
 def json_backend():
-    return files.JSONBackend(state.State)
+    return files.JSONBackend(OperationState)
 
 
 @pytest.fixture
@@ -151,4 +151,4 @@ def app_metas(app_meta, app_meta_1, app_dep, app_dep_1):
 @pytest.fixture
 def mem_registry(app_metas):
     # enforce misordering for iteration and search tests
-    return registry.MemoryAppRegistry(apps=list(reversed(app_metas)))
+    return app_registry.MemoryAppRegistry(apps=list(reversed(app_metas)))

@@ -1,14 +1,17 @@
 from typing import Generator, Optional
 
-from ..core.state import StateBackend, Status
+from ox_orch.core.state import StateBackend, Status
 
-from .base import RunContext, OperationState, AbstractOperation, RunPython
+from .base import OPERATION_REGISTRY, STATE_REGISTRY, RunContext, OperationState, AbstractOperation, RunPython
 from .plan import Plan
 from .apps import AppPlanState, AppPlan, ReconciliationPlan, AppsPlan
+from .subprocess import SubprocessOperation
 
 
 __all__ = (
     # Base
+    "OPERATION_REGISTRY",
+    "STATE_REGISTRY",
     "RunContext",
     "OperationState",
     "AbstractOperation",
@@ -19,6 +22,8 @@ __all__ = (
     "AppPlanState",
     "ReconciliationPlan",
     "AppsPlan",
+    # Others
+    "SubprocessOperation",
     # re-exports
     "Status",
 )

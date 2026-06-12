@@ -1,3 +1,4 @@
+from ox_orch.core.shell import EchoShell
 from ox_orch.operations.install import (
     InstallOperation,
     InstallState,
@@ -21,10 +22,10 @@ class DummyApp:
 class DummyInstall(InstallOperation):
     __type_id__ = "tests:op:install:dummy"
 
-    def install(self, state, packages, **kwargs):
+    def install(self, state, shell, packages, **kwargs):
         self._last_install = (packages, kwargs)
 
-    def uninstall(self, state, packages, **kwargs):
+    def uninstall(self, state, shell, packages, **kwargs):
         self._last_uninstall = packages
 
 
@@ -38,7 +39,7 @@ class TestInstallOperation:
             DummyApp("b", "pkg_b", "2.0", None),
         ]
 
-        op._apply(state, apps)
+        op._apply(state, shell=EchoShell(), apps=apps)
 
         assert "a" in state.backward
         assert "b" in state.backward
@@ -65,7 +66,7 @@ class TestInstallOperation:
             "b": {"installed_version": None},
         }
 
-        op._rollback(state)
+        op._rollback(state, shell=EchoShell())
 
         # uninstall case
         assert op._last_uninstall == ["pkg_b"]

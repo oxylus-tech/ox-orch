@@ -3,14 +3,18 @@
 from __future__ import annotations
 from typing import Any
 
-from ..core.events import Hook
-from ..core.state import StateBackend
+from ox_orch.core.events import Hook
+from ox_orch.core.state import StateBackend
+from ox_orch.core.registry import Registry, RegisteredClass, register
 
 
 __all__ = ("ExecutorHook", "RecordingHook", "PersistStateHook")
 
 
-class ExecutorHook(Hook):
+EXECUTOR_HOOK_REGISTRY = Registry()
+
+
+class ExecutorHook(Hook, RegisteredClass):
     """
     Base hook class used by the runtime executor.
 
@@ -18,6 +22,8 @@ class ExecutorHook(Hook):
     persist states, report progress, emit logs, send notifications,
     expose API events, etc.
     """
+
+    __registry__ = EXECUTOR_HOOK_REGISTRY
 
     def before_apply(self, operation, state, context):
         """
@@ -87,6 +93,7 @@ class ExecutorHook(Hook):
         pass
 
 
+@register("recording")
 class RecordingHook(ExecutorHook):
     """Record every call into :py:attr:`events`."""
 
@@ -115,6 +122,7 @@ class RecordingHook(ExecutorHook):
         self.events.append(("rollback_failed", str(error)))
 
 
+@register("persist-state")
 class PersistStateHook(ExecutorHook):
     """Persist state to the specified file."""
 

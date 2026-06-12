@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from collections import Counter
 
-from ..core.state import State
+from ox_orch.core.registry import register
+from ..operations import OperationState
 from .base import ExecutorHook
 
 
 __all__ = ("ProgressHook",)
 
 
+@register("progress")
 class ProgressHook(ExecutorHook):
     """
     Collect execution progress information.
@@ -47,7 +49,7 @@ class ProgressHook(ExecutorHook):
         """
         self.reset()
 
-    def state_update(self, state: State):
+    def state_update(self, state: OperationState):
         """
         Record a state update.
 

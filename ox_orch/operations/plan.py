@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated, Generator, Iterable
 from pydantic import Field, field_validator
 
+from ox_orch.core.registry import register
 from .base import OperationState, Status, AbstractOperation
 
 
@@ -12,16 +13,16 @@ __all__ = (
 )
 
 
+@register("plan")
 class PlanState(OperationState):
     """State of a Plan operation."""
-
-    __type_id__ = "state:op:plan"
 
     def get_resume_index(self) -> int:
         """Return resume index."""
         return next((i for i, child in enumerate(self.children) if not child.is_completed), len(self.children))
 
 
+@register("plan")
 class Plan(AbstractOperation):
     """
     Plan is an operation composed of child operations.
@@ -32,8 +33,8 @@ class Plan(AbstractOperation):
 
     operations: Annotated[list[AbstractOperation], Field(subclass_ok=True)] = Field(default_factory=list)
     """ The operations to run. """
-    __type_id__ = "op:plan"
     __state_class__ = PlanState
+    __full_context__ = True
 
     def create_state(self, **kwargs) -> OperationState:
         kwargs["children"] = []

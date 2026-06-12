@@ -1,5 +1,5 @@
 {
-    "__type_id__": "state:op",
+    "__type_id__": "operation",
     "config": {
         "state": "pending",
         "updated": "2026-02-07T16:41:04.175389Z",

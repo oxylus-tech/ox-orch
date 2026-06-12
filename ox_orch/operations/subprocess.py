@@ -2,6 +2,8 @@ import subprocess
 from typing import Any, Optional
 
 
+from ox_orch.core.registry import register
+from ox_orch.core.shell import Shell
 from .base import AbstractOperation, OperationState
 
 
@@ -50,27 +52,41 @@ class SubprocessMixin:
         """
         raise NotImplementedError
 
-    def _apply(self, state, **context):
+    def _apply(self, state, shell: Shell, **context):
         """Run forward command, as returned by :py:meth:`get_forward`."""
         cmd = self.get_forward(state, **context)
-
         if cmd:
-            self.run(cmd)
+            self.log("Run: {' '.join(cmd)}")
+
+            if not context.get("dry_run"):
+                shell.run(cmd)
+        else:
+            self.log("No command to apply")
 
         if isinstance(state, SubprocessState):
             state.forward_cmd = cmd
 
-    def _rollback(self, state, **context):
+    def _rollback(self, state, shell: Shell, **context):
         """Run forward command, as returned by :py:meth:`get_backward`."""
         cmd = self.get_backward(state, **context)
 
+        if spec := context.get("spec"):
+            if spec.dry_run:
+                self.log("Dry rollback: {' '.join(cmd)}")
+                return
+
         if cmd:
-            self.run(cmd)
+            self.log("Run: {' '.join(cmd)}")
+            if not context.get("dry_run"):
+                shell.run(cmd)
+        else:
+            self.log("No command to apply")
 
         if isinstance(state, SubprocessState):
             state.backward_cmd = cmd
 
 
+@register("subprocess")
 class SubprocessState(OperationState):
     """
     State for subprocess operations.
@@ -78,12 +94,11 @@ class SubprocessState(OperationState):
     Stores executed commands for auditability.
     """
 
-    __type_id__ = "state:op:subprocess"
-
     forward_cmd: list[str] | None = None
     backward_cmd: list[str] | None = None
 
 
+@register("subprocess")
 class SubprocessOperation(SubprocessMixin, AbstractOperation):
     """
     Generic subprocess-based operation.
@@ -93,8 +108,10 @@ class SubprocessOperation(SubprocessMixin, AbstractOperation):
     - get_backward()
     """
 
-    __type_id__ = "op:subprocess"
     _state_class = SubprocessState
+    __apply_spec__ = "shell"
+    __rollback_spec__ = "shell"
+    __full_context__ = True
 
     forward: list[str] = []
     backward: list[str] = []

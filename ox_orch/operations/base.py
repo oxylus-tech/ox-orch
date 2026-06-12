@@ -1,42 +1,55 @@
 from datetime import datetime
 import inspect
+import logging
 from typing import Callable, Generator, ClassVar, Sequence, Type
 from uuid import uuid4
 
-from django.utils.translation import gettext_lazy as _
 from pydantic import BaseModel, Field
 
-from ox_orch.utils import CloneBaseModel, LazyTranslation, PolymorphicModel
-
-from ..core.apps import AppMetadata
-from ..core.state import TreeState, HistoryState, Status
+from ox_orch.core.apps import AppMetadata
+from ox_orch.core.pydantic import CloneBaseModel, LazyTranslation, PolymorphicModel
+from ox_orch.core.registry import register, Registry
+from ox_orch.core.state import TreeState, HistoryState, Status
 
 
 __all__ = (
     "Status",  # re-export for convenience
+    "RunContext",
     "OperationState",
     "AbstractOperation",
     "RunPython",
+    "STATE_REGISTRY",
+    "OPERATION_REGISTRY",
 )
+
+
+logger = logging.getLogger("ox-orch")
 
 
 class RunContext(BaseModel):
     """Running context of operations, only assigned to the root state."""
 
-    run_id: str = Field(default_factory=str(uuid4()))
+    run_id: str = Field(default_factory=lambda: str(uuid4()))
     """ Run id. """
     started_at: datetime | None = None
     """ Run execution start. """
     finished_at: datetime | None = None
     """ Run execution end. """
-    trigger: str | None
+    trigger: str = "cli"
     """ What triggered this execution, as cli, api, scheduler,... """
 
 
-class OperationState(TreeState, HistoryState):
+STATE_REGISTRY = Registry()
+OPERATION_REGISTRY = Registry()
+
+
+@register("operation")
+class OperationState(TreeState, HistoryState, PolymorphicModel):
     """
     Keep state informations of an operation.
     """
+
+    __registry__ = STATE_REGISTRY
 
     _operation = None
     """ Actual operation instance.
@@ -46,10 +59,11 @@ class OperationState(TreeState, HistoryState):
         - :py:meth:`AbstractOperation.create_state`
         - :py:meth:`AbstractOperation.validate_state`
     """
-    __type_id__ = "state:op"
-
     operation_id: str = None
     """ Operation id. """
+
+    run_context: RunContext | None = None
+    """ Run context of the operation, only set on the root state. """
 
 
 class AbstractOperation(CloneBaseModel, PolymorphicModel):
@@ -80,6 +94,8 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
 
     """
 
+    __registry__ = OPERATION_REGISTRY
+
     __state_class__: ClassVar[OperationState] = OperationState
     """ Class model to use as a state. """
     __apply_spec__: tuple[str] | dict[str, Type | Sequence[Type]] | None = None
@@ -103,6 +119,14 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
     """ Specify context argument to be used by the :py:meth:`_rollback` method.
 
     Same than :py:attr:`__apply_spec__` but for rollback.
+    """
+    __full_context__: bool = False
+    """
+    When the __apply_spec__ or __rollback_spec__ is provided, by default
+    all other values of the context are discarded.
+
+    If you need to keep them (eg. for plan execution), you can set this
+    attribute to True.
     """
 
     label: ClassVar[LazyTranslation] = ""
@@ -128,7 +152,11 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
         """
         try:
             context = self.get_context(state, **context)
+            context = self._resolve_apply_context(context)
             self.validate_state(state)
+
+            if context.get("dry_run"):
+                self.log("Apply in dry run mode")
 
             yield state.start()
 
@@ -153,7 +181,10 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
         try:
             self.validate_state(state)
             context = self.get_context(state, **context)
-            context = self._resolve_apply_context(context)
+            context = self._resolve_rollback_context(context)
+
+            if context.get("dry_run"):
+                self.log("Rollback in dry run mode")
 
             yield state.rolling_back()
 
@@ -186,6 +217,9 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
             raise ValueError(f"Status `{state._operation}` does not matches the operation `{self}`.")
 
     def get_context(self, state, **context):
+        """Return context to provide to _apply and _rollback methods."""
+        if spec := context.get("spec"):
+            context.setdefault("dry_run", spec.dry_run)
         return context
 
     def _apply(self, state, **context):
@@ -245,11 +279,15 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
             case None:
                 return context
             case dict():
-                return self._resolve_typed_context(context, spec, phase)
+                ctx = self._resolve_typed_context(context, spec, phase)
             case tuple() | list():
-                return self._resolve_simple_context(context, spec, phase)
+                ctx = self._resolve_simple_context(context, spec, phase)
             case _:
                 raise TypeError(f"Invalid context spec type: {type(spec)}")
+
+        if self.__full_context__:
+            return context
+        return ctx
 
     def _resolve_simple_context(self, context: dict, spec: tuple[str, ...], phase: str) -> dict:
         """
@@ -304,14 +342,19 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
 
         return resolved
 
+    def log(self, msg, type="info", *args, **kwargs):
+        """Log message."""
+        msg = f"\033[33m[{self.__type_id__}]\033[0m {msg}"
+        getattr(logger, type)(msg, *args, **kwargs)
 
+
+@register("python")
 class RunPython(AbstractOperation):
     """Run python code."""
 
     forward: Callable[(AppMetadata, AbstractOperation), None]
     backward: Callable[(AppMetadata, AbstractOperation), None]
-    label = _("🐍 Run python code")
-    __type_id__ = "op:run_python"
+    label = "🐍 Run python code"
 
     def _apply(self, *args, **context):
         self.forward(self, *args, **context)
