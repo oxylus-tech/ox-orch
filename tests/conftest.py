@@ -5,6 +5,7 @@ import pytest
 from pydantic import PrivateAttr
 
 from ox_orch.core import app_registry, files
+from ox_orch.core.contexts import ExecutionContext
 from ox_orch.core.apps import AppMetadata, AppInstallState
 from ox_orch.operations import AbstractOperation, OperationState
 from ox_orch.operations.install import InstallOperation
@@ -26,12 +27,12 @@ class Operation(AbstractOperation):
     rollbacked: bool = False
     __type_id__ = "op:test:operation"
 
-    def _apply(self, state, exc=None, **kw):
+    def _apply(self, state, ctx, exc=None, **kw):
         if exc:
             raise exc
         self.applied = True
 
-    def _rollback(self, state, rexc=None, **kw):
+    def _rollback(self, state, ctx, rexc=None, **kw):
         if rexc:
             raise rexc
         self.rollbacked = True
@@ -152,3 +153,8 @@ def app_metas(app_meta, app_meta_1, app_dep, app_dep_1):
 def mem_registry(app_metas):
     # enforce misordering for iteration and search tests
     return app_registry.MemoryAppRegistry(apps=list(reversed(app_metas)))
+
+
+@pytest.fixture
+def exec_ctx():
+    return ExecutionContext()

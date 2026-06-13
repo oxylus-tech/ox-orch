@@ -62,10 +62,10 @@ class AppPlan(Plan):
             **kwargs,
         )
 
-    def get_context(self, state, **context):
-        context["app"] = self.app
-        context["app_state"] = state
-        return super().get_context(state, **context)
+    def get_inputs(self, state, **inputs):
+        inputs["app"] = self.app
+        inputs["app_state"] = state
+        return super().get_inputs(state, **inputs)
 
 
 @register("reconciliation")
@@ -86,16 +86,14 @@ class ReconciliationPlan(AbstractOperation):
 
     __state_class__ = ReconciliationState
     __apply_spec__ = ("apps",)
-    __rollback_spec__ = ("apps",)
 
     app_plan: AppPlan
 
-    def _apply(
-        self, state, apps: Iterable[AppMetadata], registry: AppRegistry | None = None, enable: bool = False, **context
-    ):
+    def _apply(self, state, ctx, apps: Iterable[AppMetadata], apps_registry: AppRegistry | None = None, **inputs):
         if not apps:
             return
 
+        registry = inputs.get("app_registry")
         if registry:
             apps = registry.get_full([a.id for a in apps])
 
@@ -111,7 +109,7 @@ class ReconciliationPlan(AbstractOperation):
             op_state = op.create_state()
             state.children.append(op_state)
 
-            yield from op.apply(state=op_state, app=app, **context)
+            yield from op.apply(op_state, ctx, app=app, **inputs)
 
         # 3. Collect registry update
         for op_state in state.children:
@@ -119,9 +117,9 @@ class ReconciliationPlan(AbstractOperation):
             state.add_update(op_state.app, **kw)
 
         # 4. Ensure all apps are enabled on enable
-        if enable:
-            for app in apps:
-                state.add_update(app, enabled=True)
+        # if inputs.get("app_enable"):
+        #    for app in apps:
+        #        state.add_update(app, enabled=True)
 
     def get_dirty_apps(self, apps: Iterable[AppMetadata]) -> list[AppMetadata]:
         """
@@ -152,8 +150,8 @@ class AppsPlan(Plan):
         - Update registry with the installed versions
     """
 
-    __apply_spec__ = {"apps": (list, None), "registry": (AppRegistry, None)}
-    __rollback_spec__ = {"apps": (list, None), "registry": (AppRegistry, None)}
+    __apply_spec__ = {"apps": (list, None), "app_registry": (AppRegistry, None)}
+    __rollback_spec__ = {"apps": (list, None), "app_registry": (AppRegistry, None)}
 
     install: AbstractOperation
     """ Installation plan (as PipInstall). """
@@ -167,13 +165,13 @@ class AppsPlan(Plan):
     def get_operations(self, state):
         return [*self.before_install, self.install, *self.after_install, self.reconciliation]
 
-    def _apply(self, state, apps: list[AppMetadata], registry: AppRegistry, **context):
-        yield from super()._apply(state, registry=registry, apps=apps, **context)
-        self.sync_registry(state, registry)
+    def _apply(self, state, ctx, apps: list[AppMetadata], app_registry: AppRegistry, **inputs):
+        yield from super()._apply(state, ctx, apps=apps, app_registry=app_registry, **inputs)
+        self.sync_registry(state, app_registry)
 
-    def _rollback(self, state, apps: list[AppMetadata], registry: AppRegistry, **context):
-        yield from super()._rollback(state, registry=registry, apps=apps, **context)
-        self.sync_registry(state, registry, "backward")
+    def _rollback(self, state, ctx, apps: list[AppMetadata], app_registry: AppRegistry, **inputs):
+        yield from super()._rollback(state, ctx, apps=apps, app_registry=app_registry, **inputs)
+        self.sync_registry(state, app_registry, "backward")
 
     def sync_registry(self, state, registry, direction="forward"):
         if direction not in ("forward", "backward"):

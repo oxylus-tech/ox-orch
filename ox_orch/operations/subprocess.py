@@ -3,7 +3,6 @@ from typing import Any, Optional
 
 
 from ox_orch.core.registry import register
-from ox_orch.core.shell import Shell
 from .base import AbstractOperation, OperationState
 
 
@@ -52,33 +51,28 @@ class SubprocessMixin:
         """
         raise NotImplementedError
 
-    def _apply(self, state, shell: Shell, **context):
+    def _apply(self, state, ctx, **context):
         """Run forward command, as returned by :py:meth:`get_forward`."""
         cmd = self.get_forward(state, **context)
         if cmd:
             self.log("Run: {' '.join(cmd)}")
 
-            if not context.get("dry_run"):
-                shell.run(cmd)
+            if not ctx.run.dry_run:
+                ctx.shell.run(cmd)
         else:
             self.log("No command to apply")
 
         if isinstance(state, SubprocessState):
             state.forward_cmd = cmd
 
-    def _rollback(self, state, shell: Shell, **context):
+    def _rollback(self, state, ctx, **context):
         """Run forward command, as returned by :py:meth:`get_backward`."""
         cmd = self.get_backward(state, **context)
 
-        if spec := context.get("spec"):
-            if spec.dry_run:
-                self.log("Dry rollback: {' '.join(cmd)}")
-                return
-
         if cmd:
             self.log("Run: {' '.join(cmd)}")
-            if not context.get("dry_run"):
-                shell.run(cmd)
+            if not ctx.run.dry_run:
+                ctx.shell.run(cmd)
         else:
             self.log("No command to apply")
 
@@ -109,9 +103,6 @@ class SubprocessOperation(SubprocessMixin, AbstractOperation):
     """
 
     _state_class = SubprocessState
-    __apply_spec__ = "shell"
-    __rollback_spec__ = "shell"
-    __full_context__ = True
 
     forward: list[str] = []
     backward: list[str] = []

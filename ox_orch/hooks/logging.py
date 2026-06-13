@@ -36,7 +36,7 @@ class LoggingHook(ExecutorHook):
             },
         )
 
-    def after_apply(self, operation, state):
+    def after_apply(self, operation, state, context):
         """
         Log successful execution.
         """
@@ -63,7 +63,7 @@ class LoggingHook(ExecutorHook):
             exc_info=error,
         )
 
-    def before_rollback(self, operation, state):
+    def before_rollback(self, operation, state, context):
         """
         Log rollback start.
         """
@@ -75,7 +75,7 @@ class LoggingHook(ExecutorHook):
             },
         )
 
-    def after_rollback(self, operation, state):
+    def after_rollback(self, operation, state, context):
         """
         Log successful rollback.
         """

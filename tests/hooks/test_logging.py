@@ -16,7 +16,7 @@ class TestLoggingHook:
         hook = LoggingHook()
 
         with caplog.at_level(logging.INFO):
-            hook.after_apply(op, op_state)
+            hook.after_apply(op, op_state, {})
 
         assert "Operation completed" in caplog.text
 
@@ -24,7 +24,7 @@ class TestLoggingHook:
         hook = LoggingHook()
 
         with caplog.at_level(logging.INFO):
-            hook.before_rollback(op, op_state)
+            hook.before_rollback(op, op_state, {})
 
         assert "Starting rollback" in caplog.text
 
@@ -32,7 +32,7 @@ class TestLoggingHook:
         hook = LoggingHook()
 
         with caplog.at_level(logging.INFO):
-            hook.after_rollback(op, op_state)
+            hook.after_rollback(op, op_state, {})
 
         assert "Rollback completed" in caplog.text
 

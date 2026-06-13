@@ -65,13 +65,13 @@ class ProgressHook(ExecutorHook):
             "status": str(state.status),
         }
 
-    def after_apply(self, operation, state):
+    def after_apply(self, operation, state, context):
         """
         Record final state.
         """
         self.state_update(state)
 
-    def after_rollback(self, operation, state):
+    def after_rollback(self, operation, state, context):
         """
         Record final rollback state.
         """

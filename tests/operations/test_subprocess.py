@@ -46,19 +46,19 @@ class TestSubprocessMixin:
         mock_run.assert_called_once()
         assert mock_run.call_args[0][0] == ["echo", "hello"]
 
-    def test_apply_sets_forward_command(self, mock_run):
+    def test_apply_sets_forward_command(self, exec_ctx, mock_run):
         op = DummyOp()
         state = SubprocessState()
 
-        op._apply(state, shell=EchoShell())
+        op._apply(state, exec_ctx, shell=EchoShell())
         # mock_run.assert_called_once_with(["echo", "forward"], check=True, stdout=None, stderr=None)
         assert state.forward_cmd == ["echo", "forward"]
 
-    def test_rollback_sets_backward_command(self, mock_run):
+    def test_rollback_sets_backward_command(self, exec_ctx, mock_run):
         op = DummyOp()
         state = SubprocessState()
 
-        op._rollback(state, shell=EchoShell())
+        op._rollback(state, exec_ctx, shell=EchoShell())
         # mock_run.assert_called_once_with(["echo", "backward"], check=True, stdout=None, stderr=None)
         assert state.backward_cmd == ["echo", "backward"]
 

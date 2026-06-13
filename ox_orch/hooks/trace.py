@@ -25,16 +25,16 @@ class TraceHook(ExecutorHook):
     def before_apply(self, operation, state, context):
         self._record(state, operation, "before_apply")
 
-    def after_apply(self, operation, state):
+    def after_apply(self, operation, state, context):
         self._record(state, operation, "after_apply")
 
     def apply_failed(self, operation, state, error):
         self._record(state, operation, "apply_failed", str(error))
 
-    def before_rollback(self, operation, state):
+    def before_rollback(self, operation, state, context):
         self._record(state, operation, "before_rollback")
 
-    def after_rollback(self, operation, state):
+    def after_rollback(self, operation, state, context):
         self._record(state, operation, "after_rollback")
 
     def rollback_failed(self, operation, state, error):

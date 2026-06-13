@@ -1,12 +1,10 @@
-from datetime import datetime
 import inspect
 import logging
 from typing import Callable, Generator, ClassVar, Sequence, Type
-from uuid import uuid4
 
-from pydantic import BaseModel, Field
 
 from ox_orch.core.apps import AppMetadata
+from ox_orch.core.contexts import RunContext, ExecutionContext
 from ox_orch.core.pydantic import CloneBaseModel, LazyTranslation, PolymorphicModel
 from ox_orch.core.registry import register, Registry
 from ox_orch.core.state import TreeState, HistoryState, Status
@@ -24,19 +22,6 @@ __all__ = (
 
 
 logger = logging.getLogger("ox-orch")
-
-
-class RunContext(BaseModel):
-    """Running context of operations, only assigned to the root state."""
-
-    run_id: str = Field(default_factory=lambda: str(uuid4()))
-    """ Run id. """
-    started_at: datetime | None = None
-    """ Run execution start. """
-    finished_at: datetime | None = None
-    """ Run execution end. """
-    trigger: str = "cli"
-    """ What triggered this execution, as cli, api, scheduler,... """
 
 
 STATE_REGISTRY = Registry()
@@ -120,7 +105,7 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
 
     Same than :py:attr:`__apply_spec__` but for rollback.
     """
-    __full_context__: bool = False
+    __full_inputs__: bool = False
     """
     When the __apply_spec__ or __rollback_spec__ is provided, by default
     all other values of the context are discarded.
@@ -137,33 +122,34 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
         return self.__state_class__(
             operation_id=type(self).__type_id__,
             _operation=self,
-            name=str(type(self).label or type(self).__type_id__),
+            name=str(type(self).__type_id__),
             **kwargs,
         )
 
-    def apply(self, state: OperationState, **context) -> Generator[OperationState]:
+    def apply(self, state: OperationState, ctx: ExecutionContext, **inputs) -> Generator[OperationState]:
         """
         Apply operation, ensuring state update.
 
         On failure, it will set state on failure if not yet rolled-back.
 
         :param state: state used for reporting this operation's status;
-        :param **context: extra context arguments passed by the caller;
+        :param **inputs: extra inputs arguments passed by the caller;
         """
         try:
-            context = self.get_context(state, **context)
-            context = self._resolve_apply_context(context)
+            # We enforce run inputs usage.
+            inputs = self.get_inputs(state, **inputs)
+            inputs = self._resolve_apply_inputs(inputs)
             self.validate_state(state)
 
-            if context.get("dry_run"):
+            if ctx.run.dry_run:
                 self.log("Apply in dry run mode")
 
             yield state.start()
 
             if inspect.isgeneratorfunction(self._apply):
-                yield from self._apply(state, **context)
+                yield from self._apply(state, ctx, **inputs)
             else:
-                self._apply(state, **context)
+                self._apply(state, ctx, **inputs)
 
             yield state.finish()
         except Exception as exc:
@@ -171,27 +157,27 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
                 yield state.fail(exc)
             raise
 
-    def rollback(self, state: OperationState, **context) -> Generator[OperationState]:
+    def rollback(self, state: OperationState, ctx: ExecutionContext, **inputs) -> Generator[OperationState]:
         """
         Rollback operation, ensuring state update.
 
         :param state: state used for reporting this operation's status;
-        :param **context: extra context arguments passed by the caller;
+        :param **inputs: extra inputs arguments passed by the caller;
         """
         try:
             self.validate_state(state)
-            context = self.get_context(state, **context)
-            context = self._resolve_rollback_context(context)
+            inputs = self.get_inputs(state, **inputs)
+            inputs = self._resolve_rollback_inputs(inputs)
 
-            if context.get("dry_run"):
+            if ctx.run.dry_run:
                 self.log("Rollback in dry run mode")
 
             yield state.rolling_back()
 
             if inspect.isgeneratorfunction(self._rollback):
-                yield from self._rollback(state, **context)
+                yield from self._rollback(state, ctx, **inputs)
             else:
-                self._rollback(state, **context)
+                self._rollback(state, ctx, **inputs)
 
             yield state.rolled_back()
         except Exception as exc:
@@ -216,125 +202,125 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
         elif state._operation != self:
             raise ValueError(f"Status `{state._operation}` does not matches the operation `{self}`.")
 
-    def get_context(self, state, **context):
-        """Return context to provide to _apply and _rollback methods."""
-        if spec := context.get("spec"):
-            context.setdefault("dry_run", spec.dry_run)
-        return context
+    def get_inputs(self, state, **inputs):
+        """Return inputs to provide to _apply and _rollback methods."""
+        if spec := inputs.get("spec"):
+            inputs.setdefault("dry_run", spec.dry_run)
+        return inputs
 
-    def _apply(self, state, **context):
+    def _apply(self, state, ctx, **context):
         """Where you put the actual code for applying the operation."""
         pass
 
-    def _rollback(self, state, **context):
+    def _rollback(self, state, ctx, **context):
         """Where you put the actual code for applying the operation's rollback."""
         pass
 
-    def _resolve_apply_context(self, context: dict) -> dict:
+    def _resolve_apply_inputs(self, inputs: dict) -> dict:
         """
-        Resolve and validate execution context for the apply phase.
+        Resolve and validate execution inputs for the apply phase.
 
-        :param context: Global execution context provided by the executor.
-        :return: Filtered context containing only required keys for apply.
+        :param inputs: Global execution inputs provided by the executor.
+        :return: Filtered inputs containing only required keys for apply.
         :raises KeyError: If a required key is missing.
         :raises TypeError: If typed specification is violated.
         """
-        return self._resolve_context(
-            context=context,
+        return self._resolve_inputs(
+            inputs=inputs,
             spec=self.__apply_spec__,
             phase="apply",
         )
 
-    def _resolve_rollback_context(self, context: dict) -> dict:
+    def _resolve_rollback_inputs(self, inputs: dict) -> dict:
         """
-        Resolve and validate execution context for the rollback phase.
+        Resolve and validate execution inputs for the rollback phase.
 
-        :param context: Global execution context provided by the executor.
-        :return: Filtered context containing only required keys for rollback.
+        :param inputs: Global execution inputs provided by the executor.
+        :return: Filtered inputs containing only required keys for rollback.
         :raises KeyError: If a required key is missing.
         :raises TypeError: If typed specification is violated.
         """
-        return self._resolve_context(
-            context=context,
+        return self._resolve_inputs(
+            inputs=inputs,
             spec=self.__rollback_spec__,
             phase="rollback",
         )
 
-    def _resolve_context(self, context: dict, spec, phase: str) -> dict:
+    def _resolve_inputs(self, inputs: dict, spec, phase: str) -> dict:
         """
-        Dispatch context resolution based on specification type.
+        Dispatch inputs resolution based on specification type.
 
         Supports:
-        - None: return context as is
+        - None: return inputs as is
         - tuple/list: key presence validation only
         - dict: key presence + type validation
 
-        :param context: Global execution context.
+        :param inputs: Global execution inputs.
         :param spec: Context specification (tuple or dict).
         :param phase: Execution phase name ("apply" or "rollback").
-        :return: Validated and filtered context dictionary.
+        :return: Validated and filtered inputs dictionary.
         :raises TypeError: If spec format is unsupported.
         """
         match spec:
             case None:
-                return context
+                return inputs
             case dict():
-                ctx = self._resolve_typed_context(context, spec, phase)
+                ctx = self._resolve_typed_inputs(inputs, spec, phase)
             case tuple() | list():
-                ctx = self._resolve_simple_context(context, spec, phase)
+                ctx = self._resolve_simple_inputs(inputs, spec, phase)
             case _:
-                raise TypeError(f"Invalid context spec type: {type(spec)}")
+                raise TypeError(f"Invalid inputs spec type: {type(spec)}")
 
-        if self.__full_context__:
-            return context
+        if self.__full_inputs__:
+            return inputs
         return ctx
 
-    def _resolve_simple_context(self, context: dict, spec: tuple[str, ...], phase: str) -> dict:
+    def _resolve_simple_inputs(self, inputs: dict, spec: tuple[str, ...], phase: str) -> dict:
         """
-        Resolve context using a minimal required-key specification.
+        Resolve inputs using a minimal required-key specification.
 
-        Ensures all keys exist in the provided context without type validation.
+        Ensures all keys exist in the provided inputs without type validation.
 
-        :param context: Global execution context.
+        :param inputs: Global execution inputs.
         :param spec: Tuple of required keys.
         :param phase: Execution phase name.
-        :return: Dictionary containing resolved context values.
+        :return: Dictionary containing resolved inputs values.
         :raises KeyError: If a required key is missing.
         """
         resolved = {}
 
         for key in spec:
-            if key not in context:
+            if key not in inputs:
                 raise KeyError(f"{self.__class__.__name__} requires '{key}' for {phase}")
 
-            resolved[key] = context[key]
+            resolved[key] = inputs[key]
 
         return resolved
 
-    def _resolve_typed_context(self, context: dict, spec: dict[str, type], phase: str) -> dict:
+    def _resolve_typed_inputs(self, inputs: dict, spec: dict[str, type], phase: str) -> dict:
         """
-        Resolve context using a typed specification.
+        Resolve inputs using a typed specification.
 
         Validates both presence and type of each required key.
 
-        :param context: Global execution context.
+        :param inputs: Global execution inputs.
         :param spec: Mapping of key to expected type.
         :param phase: Execution phase name.
-        :return: Dictionary containing validated context values.
+        :return: Dictionary containing validated inputs values.
         :raises KeyError: If a required key is missing.
         :raises TypeError: If a value does not match the expected type.
         """
         resolved = {}
 
         for key, expected_type in spec.items():
-            if key not in context:
+            if key not in inputs:
                 raise KeyError(f"{self.__class__.__name__} requires '{key}' for {phase}")
 
-            value = context[key]
+            value = inputs[key]
 
             if not isinstance(value, expected_type):
                 raise TypeError(
-                    f"{self.__class__.__name__} context key '{key}' "
+                    f"{self.__class__.__name__} inputs key '{key}' "
                     f"expected {expected_type}, got {type(value)} in {phase}"
                 )
 

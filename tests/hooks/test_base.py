@@ -12,11 +12,11 @@ class TestExecutorHook:
         hook = ExecutorHook()
 
         hook.before_apply(op, op_state, {})
-        hook.after_apply(op, op_state)
+        hook.after_apply(op, op_state, {})
         hook.apply_failed(op, op_state, RuntimeError("fail"))
 
-        hook.before_rollback(op, op_state)
-        hook.after_rollback(op, op_state)
+        hook.before_rollback(op, op_state, {})
+        hook.after_rollback(op, op_state, {})
         hook.rollback_failed(op, op_state, RuntimeError("fail"))
 
         hook.state_update(op_state)
@@ -35,7 +35,7 @@ class TestRecordingHook:
     def test_after_apply_records_event(self, op, op_state):
         hook = RecordingHook()
 
-        hook.after_apply(op, op_state)
+        hook.after_apply(op, op_state, {})
 
         assert hook.events == [("after_apply", op_state.status)]
 
@@ -49,14 +49,14 @@ class TestRecordingHook:
     def test_before_rollback_records_event(self, op, op_state):
         hook = RecordingHook()
 
-        hook.before_rollback(op, op_state)
+        hook.before_rollback(op, op_state, {})
 
         assert hook.events == [("before_rollback", op_state.status)]
 
     def test_after_rollback_records_event(self, op, op_state):
         hook = RecordingHook()
 
-        hook.after_rollback(op, op_state)
+        hook.after_rollback(op, op_state, {})
 
         assert hook.events == [("after_rollback", op_state.status)]
 
@@ -71,8 +71,8 @@ class TestRecordingHook:
         hook = RecordingHook()
 
         hook.before_apply(op, op_state, {})
-        hook.after_apply(op, op_state)
-        hook.before_rollback(op, op_state)
+        hook.after_apply(op, op_state, {})
+        hook.before_rollback(op, op_state, {})
 
         assert len(hook.events) == 3
         assert hook.events[0][0] == "before_apply"

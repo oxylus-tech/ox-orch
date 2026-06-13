@@ -2,16 +2,18 @@ from typing import Optional
 
 import pytest
 
-from ..conftest import Operation, FakeInstall
 from ox_orch.core import state
+from ox_orch.core.contexts import ExecutionContext
 from ox_orch.operations import Plan, AppPlan, ReconciliationPlan, AppsPlan
+
+from ..conftest import Operation, FakeInstall
 
 
 def apply(op, state, **kwargs):
     """Apply operations and return a tuple of states and exception (if any)."""
     states, exc = [], None
     try:
-        for s in op.apply(state, **kwargs):
+        for s in op.apply(state, ExecutionContext(), **kwargs):
             states.append(s.clone())
     except Exception as e:
         exc = e
@@ -22,7 +24,7 @@ def rollback(op, state, **kwargs):
     """Rollback operations and return a tuple of states and exception (if any)."""
     states, exc = [], None
     try:
-        for s in op.rollback(state, **kwargs):
+        for s in op.rollback(state, ExecutionContext(), **kwargs):
             states.append(s.clone())
     except Exception as e:
         exc = e

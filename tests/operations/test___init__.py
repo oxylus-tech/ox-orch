@@ -12,10 +12,24 @@ def state_backend(apps_plan):
 
 def test_apply_rollback_wait_simple_workflow(apps_plan, state_backend, mem_registry, app_metas):
     state = apps_plan.create_state()
-    st, exc = wait(apply, apps_plan, state, state_backend, registry=mem_registry, apps=app_metas, shell=EchoShell())
+    st, exc = wait(
+        apply,
+        apps_plan,
+        state,
+        state_backend=state_backend,
+        app_registry=mem_registry,
+        apps=app_metas,
+        shell=EchoShell(),
+    )
     assert state.status == Status.COMPLETED
 
     states, exc = wait(
-        rollback, apps_plan, state, state_backend, registry=mem_registry, apps=app_metas, shell=EchoShell()
+        rollback,
+        apps_plan,
+        state,
+        state_backend=state_backend,
+        app_registry=mem_registry,
+        apps=app_metas,
+        shell=EchoShell(),
     )
     assert state.status == Status.ROLLED_BACK

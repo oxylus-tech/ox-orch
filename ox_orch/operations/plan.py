@@ -34,7 +34,7 @@ class Plan(AbstractOperation):
     operations: Annotated[list[AbstractOperation], Field(subclass_ok=True)] = Field(default_factory=list)
     """ The operations to run. """
     __state_class__ = PlanState
-    __full_context__ = True
+    __full_inputs__ = True
 
     def create_state(self, **kwargs) -> OperationState:
         kwargs["children"] = []
@@ -44,12 +44,12 @@ class Plan(AbstractOperation):
     def validate_operations(cls, v):
         return [AbstractOperation.model_validate(op) if isinstance(op, dict) and "__type__" in op else op for op in v]
 
-    def _apply(self, state, **context) -> Generator[OperationState]:
+    def _apply(self, state, ctx, **inputs) -> Generator[OperationState]:
         """
         Execute nested operations.
 
         On failure, it will rollback the whole current operation before raising
-        the exception again. The ``**context`` arguments will be passed down to
+        the exception again. The ``**inputs`` arguments will be passed down to
         the :py:meth:`rollback` method.
 
         .. note::
@@ -79,14 +79,14 @@ class Plan(AbstractOperation):
                     op_state = op.create_state()
                     state.children.append(op_state)
 
-                yield from op.apply(state=op_state, **context)
+                yield from op.apply(op_state, ctx, **inputs)
             except Exception as exc:
                 yield state.fail(exc)
-                context["op_idx"] = idx
-                yield from self.rollback(state, **context)
+                inputs["op_idx"] = idx
+                yield from self.rollback(state, ctx, **inputs)
                 raise
 
-    def _rollback(self, state, **context) -> Generator[OperationState]:
+    def _rollback(self, state, ctx, **inputs) -> Generator[OperationState]:
         """
         Execute rollbacks for applied operations (in reverse order).
 
@@ -105,11 +105,11 @@ class Plan(AbstractOperation):
 
         for op, op_state in zip(reversed(operations), reversed(states)):
             if op_state.is_any(Status.COMPLETED, Status.RUNNING, Status.FAILED):
-                yield from op.rollback(op_state, **context)
+                yield from op.rollback(op_state, ctx, **inputs)
 
-    def get_context(self, state, **context):
-        context["plan"] = self
-        return super().get_context(state, **context)
+    def get_inputs(self, state, **inputs):
+        inputs["plan"] = self
+        return super().get_inputs(state, **inputs)
 
     def get_operations(self, state: OperationState) -> Iterable[AbstractOperation]:
         """

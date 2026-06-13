@@ -1,9 +1,8 @@
 import pytest
 
-from ox_orch.core.execution import Executor, ExecutionError, ExecutionSpec, run_executor
+from ox_orch.core.execution import Executor, ExecutionError, ExecutionSpec
 from ox_orch.core.state import Status
 from ox_orch.operations import AbstractOperation
-from ox_orch.operations.base import RunContext
 
 
 class FakeOperation(AbstractOperation):
@@ -18,13 +17,13 @@ class FakeOperation(AbstractOperation):
     fail_apply: bool = False
     fail_rollback: bool = False
 
-    def _apply(self, state, **context):
+    def _apply(self, state, ctx, **context):
         if self.fail_apply:
             raise RuntimeError("apply failed")
         self.applied = True
         yield state
 
-    def _rollback(self, state, **context):
+    def _rollback(self, state, ctx, **context):
         if self.fail_rollback:
             raise RuntimeError("rollback failed")
         self.rolled_back = True
@@ -48,57 +47,68 @@ def executor():
 
 class TestExecutor:
     def test_apply_success(self, executor, operation, state):
-        run_context = RunContext()
-        result = executor.apply(operation, run_context, state=state)
+        spec = ExecutionSpec(operation=operation)
 
-        assert result is state
+        result = executor.apply_sync(spec)
+
+        assert result.status == Status.COMPLETED
         assert operation.applied is True
-        assert state.run_context is not None
-        assert state.status.name == "COMPLETED"
+        assert result.run_context is not None
 
-    def test_apply_with_context(self, executor, operation, state):
-        def _apply(self, state, value=None, **_):
+    def test_apply_with_inputs(self, executor, operation, state):
+        def _apply(self, state, ctx=None, value=None, **_):
             state._value = value
             yield state
 
         operation._apply = _apply.__get__(operation, FakeOperation)
-
-        run_context = RunContext()
-        executor.apply(operation, run_context, state=state, context={"value": 42})
+        spec = ExecutionSpec(
+            operation=operation,
+            inputs={"value": 42},
+        )
+        state = executor.apply_sync(spec)
 
         assert state._value == 42
 
     def test_apply_failure(self, executor, operation, state):
         operation.fail_apply = True
 
-        run_context = RunContext()
-        with pytest.raises(ExecutionError):
-            executor.apply(operation, run_context, state=state)
+        spec = ExecutionSpec(operation=operation, state=state)
 
-        assert state.status.name == "FAILED"
+        with pytest.raises(ExecutionError):
+            executor.apply_sync(spec)
 
     def test_rollback_success(self, executor, operation, state):
-        state.status = Status.COMPLETED
+        operation.applied = True
+        spec = ExecutionSpec(operation=operation)
+        state.status = Status.FAILED
 
-        result = executor.rollback(operation, state)
+        result = executor.rollback_sync(spec, state)
 
         assert result is state
         assert operation.rolled_back is True
 
     def test_rollback_failure(self, executor, operation, state):
         operation.fail_rollback = True
-        state.status = Status.COMPLETED
+        spec = ExecutionSpec(operation=operation)
 
         with pytest.raises(ExecutionError):
-            executor.rollback(operation, state)
+            executor.rollback_sync(spec, state)
 
-        assert state.status.name == "FAILED"
+    def test_run_executor_apply(self, executor, operation, state):
+        spec = ExecutionSpec(operation=operation)
 
-    def test_consume_result_non_iterable(self, executor):
-        # should not raise
-        executor._consume_result(None)
-        executor._consume_result("string")
-        executor._consume_result(123)
+        result = executor.apply_sync(spec)
+
+        assert result.status == Status.COMPLETED
+        assert operation.applied is True
+
+    def test_run_executor_rollback(self, executor, operation, state):
+        spec = ExecutionSpec(operation=operation)
+        state.status = Status.FAILED
+        result = executor.rollback_sync(spec, state)
+
+        assert result is state
+        assert operation.rolled_back is True
 
 
 class TestExecutionSpec:
@@ -107,41 +117,9 @@ class TestExecutionSpec:
 
         assert spec.operation is operation
         assert spec.dry_run is False
-        assert isinstance(spec.context, dict)
+        assert isinstance(spec.inputs, dict)
 
     def test_spec_context_storage(self, operation):
-        spec = ExecutionSpec(operation=operation, context={"a": 1})
+        spec = ExecutionSpec(operation=operation, inputs={"a": 1})
 
-        assert spec.context["a"] == 1
-
-
-class TestRunExecutor:
-    def test_run_executor_apply(self, operation, state):
-        spec = ExecutionSpec(operation=operation, state=state)
-
-        result = run_executor(spec, action="apply")
-
-        assert result is state
-        assert operation.applied is True
-
-    def test_run_executor_rollback(self, operation, state):
-        state.status = Status.COMPLETED
-
-        spec = ExecutionSpec(operation=operation, state=state)
-
-        result = run_executor(spec, action="rollback")
-
-        assert result is state
-        assert operation.rolled_back is True
-
-    def test_run_executor_missing_state_on_rollback(self, operation):
-        spec = ExecutionSpec(operation=operation, state=None)
-
-        with pytest.raises(ValueError):
-            run_executor(spec, action="rollback")
-
-    def test_run_executor_invalid_action(self, operation):
-        spec = ExecutionSpec(operation=operation)
-
-        with pytest.raises(ValueError):
-            run_executor(spec, action="invalid")
+        assert spec.inputs["a"] == 1

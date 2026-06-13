@@ -35,7 +35,7 @@ class ExecutorHook(Hook, RegisteredClass):
         """
         pass
 
-    def after_apply(self, operation, state):
+    def after_apply(self, operation, state, context):
         """
         Called after a successful execution.
 
@@ -54,7 +54,7 @@ class ExecutorHook(Hook, RegisteredClass):
         """
         pass
 
-    def before_rollback(self, operation, state):
+    def before_rollback(self, operation, state, context):
         """
         Called before rollback starts.
 
@@ -63,7 +63,7 @@ class ExecutorHook(Hook, RegisteredClass):
         """
         pass
 
-    def after_rollback(self, operation, state):
+    def after_rollback(self, operation, state, context):
         """
         Called after a successful rollback.
 
@@ -106,16 +106,16 @@ class RecordingHook(ExecutorHook):
     def before_apply(self, operation, state, context):
         self.events.append(("before_apply", state.status))
 
-    def after_apply(self, operation, state):
+    def after_apply(self, operation, state, context):
         self.events.append(("after_apply", state.status))
 
     def apply_failed(self, operation, state, error):
         self.events.append(("apply_failed", str(error)))
 
-    def before_rollback(self, operation, state):
+    def before_rollback(self, operation, state, context):
         self.events.append(("before_rollback", state.status))
 
-    def after_rollback(self, operation, state):
+    def after_rollback(self, operation, state, context):
         self.events.append(("after_rollback", state.status))
 
     def rollback_failed(self, operation, state, error):

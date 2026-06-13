@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
 import os
 from pathlib import Path
@@ -38,6 +39,22 @@ class Shell(ABC):
 
     def __init__(self, spec: ShellSpec):
         self.spec = spec
+
+    @staticmethod
+    def from_spec(spec: ShellSpec | None = None) -> Shell:
+        """
+        Return a Shell instance based on the provided spec.
+
+        It looks up for a relevant backend provided by SHELL_REGISTRY.
+        When no spec is provided, it'll return a default one.
+        """
+        if spec is None:
+            return LocalShell(ShellSpec())
+
+        backend = SHELL_REGISTRY.get(spec.backend)
+        if backend is None:
+            raise ValueError(f"Unknown shell backend for {spec.backend}")
+        return backend(spec)
 
     @abstractmethod
     def run(self, command: Sequence[str]):

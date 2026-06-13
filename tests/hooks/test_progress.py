@@ -46,14 +46,14 @@ class TestProgressHook:
     def test_after_apply(self, op, op_state):
         hook = ProgressHook()
 
-        hook.after_apply(op, op_state)
+        hook.after_apply(op, op_state, {})
 
         assert hook.total_updates == 1
 
     def test_after_rollback(self, op, op_state):
         hook = ProgressHook()
 
-        hook.after_rollback(op, op_state)
+        hook.after_rollback(op, op_state, {})
 
         assert hook.total_updates == 1
 

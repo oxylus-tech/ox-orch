@@ -1,5 +1,6 @@
 from typing import Generator, Optional
 
+from ox_orch.core.contexts import ExecutionContext
 from ox_orch.core.state import StateBackend, Status
 
 from .base import OPERATION_REGISTRY, STATE_REGISTRY, RunContext, OperationState, AbstractOperation, RunPython
@@ -30,39 +31,49 @@ __all__ = (
 
 
 def apply(
-    operation: AbstractOperation, state: OperationState, state_backend: Optional[StateBackend] = None, **kwargs
+    operation: AbstractOperation,
+    state: OperationState,
+    ctx: ExecutionContext | None = None,
+    state_backend: Optional[StateBackend] = None,
+    **kwargs
 ) -> Generator[OperationState, None, None]:
     """
     Apply operation saving state at each change and handling rolling back on error.
 
     :param operation: the actual operation to apply.
+    :param ctx: execution context.
     :param state_backend: the state backend used to load and store the operation's state.
     :param **kwargs: arguments passed to the operation.
     """
-
-    for state_ in operation.apply(state, **kwargs):
+    ctx = ctx or ExecutionContext()
+    for state_ in operation.apply(state, ctx, **kwargs):
         state_backend and state_backend.save(state_)
         yield state
 
 
 def rollback(
-    operation: AbstractOperation, state: OperationState, state_backend: Optional[StateBackend] = None, **kwargs
+    operation: AbstractOperation,
+    state: OperationState,
+    ctx: ExecutionContext | None = None,
+    state_backend: Optional[StateBackend] = None,
+    **kwargs
 ) -> Generator[OperationState, None, None]:
     """
     Apply operation saving state at each change and handling rolling back on error.
 
     :param operation: the actual operation to apply.
+    :param ctx: execution context.
     :param state_backend: the state backend used to load and store the operation's state.
     :param **kwargs: arguments passed to the operation.
     """
-
-    for state_ in operation.rollback(state, **kwargs):
+    ctx = ctx or ExecutionContext()
+    for state_ in operation.rollback(state, ctx, **kwargs):
         state_backend and state_backend.save(state_)
         yield state
 
 
 def wait(
-    func, operation: AbstractOperation, state: OperationState, raises=True, *args, **kwargs
+    func, operation: AbstractOperation, state: OperationState, *args, raises=True, **kwargs
 ) -> list[OperationState] | tuple[list[OperationState], Exception | None]:
     """
     Execute the provided :py:meth:`apply` or :py:meth:`rollback` function and
@@ -81,7 +92,7 @@ def wait(
 
         from ox_orch.core import apply, rollback, wait #, ...
 
-        wait(apply, apps_plan, state_backend)
+        wait(apply, apps_plan, state_backend=state_backend)
 
     """
     states, exc = [], None

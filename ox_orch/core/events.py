@@ -1,5 +1,8 @@
 from dataclasses import dataclass
-from typing import Any, Type
+from typing import Any, ClassVar, Type, Iterable
+
+
+from .registry import Registry
 
 
 __all__ = ("Hook", "HookEmitter")
@@ -17,9 +20,9 @@ class Hook:
     call the related method.
     """
 
-    def emit(self, event, **payload: Any):
+    def emit(self, event, *args, **kwargs):
         if hook := getattr(self, event, None):
-            hook(**payload)
+            hook(*args, **kwargs)
 
 
 class HookEmitter:
@@ -31,28 +34,53 @@ class HookEmitter:
     hook_class at init.
     """
 
-    hook_class: Type[Hook] = Hook
+    hook_registry: ClassVar[Registry] | None = None
+    """
+    Hooks registry, used to get the hooks when provided as string to :py:meth:`listen`.
+    """
+    hook_class: ClassVar[Type[Hook]] = Hook
     """ Supported hook class. """
     hooks: list[Hook] = None
     """ The list of hooks. """
 
-    def emit(self, event: str, **payload: Any):
+    def emit(self, event: str, *args, **kwargs: Any):
         if not self.hooks:
             return
 
         for hook in self.hooks:
-            hook.emit(event, **payload)
+            hook.emit(event, *args, **kwargs)
 
-    def listen(self, *hooks: list[Hook]):
+    def listen(self, hooks: Hook | str | Iterable[Hook | str], reset: bool = False):
         """
         Add multiple hooks handlers.
 
-        :raises: ValueError when hook does not match :py:attr:`hook_class`.
+        :param hooks: hook(s) to add;
+        :param reset: reset hooks;
+
+        :raises ValueError: when hook does not match :py:attr:`hook_class`.
+        :raises ValueError: when hook is a string and no registry is provided.
         """
         # ensure agains't missing initialization.
         if self.hooks is None:
             self.hooks = []
-        for hook in hooks:
-            if not isinstance(hook, self.hook_class):
-                raise ValueError(f"Hook {hook} must be a subclass of {self.hook_class.__name__}")
-        self.hooks.extend(hook)
+
+        if isinstance(hooks, (Hook, str)):
+            self.hooks.append(self.__get_hook(hooks))
+        else:
+            self.hooks.extend(self.__get_hook(hook) for hook in hooks)
+
+    def __get_hook(self, hook: Hook | str) -> Hook:
+        """
+        Get the real hook from provided one.
+
+        :raises ValueError: when no registry is provided or hook is of wrong subclass.
+        """
+        if isinstance(hook, str):
+            if self.hook_registry is None:
+                raise ValueError(f"Hook registry is not provided on {type(self)}.")
+            hook = self.hook_registry.get(hook)()
+
+        if not isinstance(hook, self.hook_class):
+            raise ValueError(f"Hook {hook} must be a subclass of {self.hook_class.__name__}")
+
+        return hook
