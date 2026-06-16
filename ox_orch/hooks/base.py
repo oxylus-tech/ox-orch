@@ -1,10 +1,11 @@
 """ Provide hooks that can be reused with the executor. """
 
 from __future__ import annotations
+from dataclasses import dataclass
 from typing import Any
 
 from ox_orch.core.events import Hook
-from ox_orch.core.state import StateBackend
+from ox_orch.core.stores import Store
 from ox_orch.core.registry import Registry, RegisteredClass, register
 
 
@@ -123,12 +124,19 @@ class RecordingHook(ExecutorHook):
 
 
 @register("persist-state")
+@dataclass
 class PersistStateHook(ExecutorHook):
     """Persist state to the specified file."""
 
-    backend: StateBackend
+    store: Store
+    auto_save: bool = False
 
     def state_update(self, state):
         if not state._source:
             raise ValueError("State `_source` must be set to the target file path.")
-        self.backend.save(state)
+        self.store.commit([state])
+
+        if self.auto_save:
+            if not hasattr(self.store, "save"):
+                raise ValueError("Store misses save() method.")
+            self.store.save()

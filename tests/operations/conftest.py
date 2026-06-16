@@ -4,7 +4,7 @@ import pytest
 
 from ox_orch.core import state
 from ox_orch.core.contexts import ExecutionContext
-from ox_orch.operations import Plan, AppPlan, ReconciliationPlan, AppsPlan
+from ox_orch.operations import Plan, AppPlan, AppsContext, ReconciliationPlan, AppsPlan
 
 from ..conftest import Operation, FakeInstall
 
@@ -14,7 +14,7 @@ def apply(op, state, **kwargs):
     states, exc = [], None
     try:
         for s in op.apply(state, ExecutionContext(), **kwargs):
-            states.append(s.clone())
+            states.append(s.model_copy(deep=True))
     except Exception as e:
         exc = e
     return states, exc
@@ -25,7 +25,7 @@ def rollback(op, state, **kwargs):
     states, exc = [], None
     try:
         for s in op.rollback(state, ExecutionContext(), **kwargs):
-            states.append(s.clone())
+            states.append(s.model_copy(deep=True))
     except Exception as e:
         exc = e
     return states, exc
@@ -77,9 +77,8 @@ def reconciliation(app_plan):
 
 
 @pytest.fixture
-def apps_plan(mem_registry, reconciliation, op, op_1, op_2, op_3):
+def apps_plan(reconciliation, op, op_1, op_2, op_3):
     return AppsPlan(
-        registry=mem_registry,
         install=FakeInstall(),
         reconciliation=reconciliation,
         before_install=[op_1],
@@ -88,3 +87,8 @@ def apps_plan(mem_registry, reconciliation, op, op_1, op_2, op_3):
         # pre_operations=[op, op_1],
         # operations=[op_2, op_3],
     )
+
+
+@pytest.fixture
+def apps_ctx(app_store, app_state_store, app_dep, app_dep_1):
+    return AppsContext(store=app_store, state_store=app_state_store, apps=[app_dep, app_dep_1])

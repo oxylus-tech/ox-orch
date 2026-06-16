@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import Any
 
 from pydantic import BaseModel, model_serializer
@@ -7,29 +6,9 @@ from .registry import RegisteredClass
 
 
 __all__ = (
-    "CloneBaseModel",
     "PolymorphicModel",
     "LazyTranslation",
 )
-
-
-class CloneBaseModel(BaseModel):
-    """Pydantic BaseModel that can clone itself."""
-
-    def clone(self, **kwargs):
-        """Clone node overriding values using ``**kwargs``.
-
-        Note that the values will be validated using ``model_validate``.
-        """
-        # data = self.model_dump(mode="json")
-        # print('clone self', type(self), data)
-        # breakpoint()
-        # obj = type(self).model_validate(data)
-        obj = deepcopy(self)
-        # For some reason updating data doesn't work.
-        for k, v in kwargs.items():
-            setattr(obj, k, v)
-        return obj
 
 
 class PolymorphicModel(RegisteredClass, BaseModel):

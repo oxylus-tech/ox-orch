@@ -1,7 +1,8 @@
 import pytest
 
 from ox_orch.hooks.base import ExecutorHook, RecordingHook, PersistStateHook
-from ox_orch.core.state import StateBackend
+from ox_orch.core import MemoryStore
+from ox_orch.operations import OperationState
 
 
 class TestExecutorHook:
@@ -80,34 +81,19 @@ class TestRecordingHook:
         assert hook.events[2][0] == "before_rollback"
 
 
-class DummyBackend(StateBackend):
-    def __init__(self):
-        self.saved = []
-
-    def load(self, source):
-        return None
-
-    def save(self, state=None, target=None):
-        self.saved.append(state)
-
-
 class TestPersistStateHook:
     def test_state_update_saves_state(self, op_state):
-        backend = DummyBackend()
-        hook = PersistStateHook()
-        hook.backend = backend
+        store = MemoryStore(OperationState)
+        hook = PersistStateHook(store=store)
 
         op_state._source = "/tmp/state.yml"
-
         hook.state_update(op_state)
-
-        assert len(backend.saved) == 1
-        assert backend.saved[0] is op_state
+        assert len(store.data) == 1
 
     def test_state_update_requires_source(self, op_state):
-        backend = DummyBackend()
-        hook = PersistStateHook()
-        hook.backend = backend
+        store = MemoryStore(OperationState)
+        hook = PersistStateHook(store=store)
+        hook.store = store
 
         op_state._source = None
 

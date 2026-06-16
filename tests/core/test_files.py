@@ -1,14 +1,10 @@
 import json
 
 import pytest
-from pydantic import BaseModel
 import yaml
 
 from ox_orch.core.files import YAMLBackend, JSONBackend, JSONLBackend
-
-
-class DummyModel(BaseModel):
-    name: str
+from ..conftest import DummyModel
 
 
 @pytest.fixture
@@ -23,7 +19,7 @@ def json_list_backend():
 
 @pytest.fixture
 def jsonl_backend():
-    return JSONLBackend(DummyModel, as_list=True)
+    return JSONLBackend(DummyModel)
 
 
 @pytest.fixture
@@ -53,7 +49,7 @@ def json_out(data_dir):
 class TestFileAndYAMLBackend:
     def test_load(self, yaml_backend, yaml_file):
         dat = yaml_backend.load(yaml_file)
-        assert dat.name
+        assert dat.operation_id
 
     def test_save(self, yaml_backend, yaml_out, op_state):
         yaml_backend.save(yaml_out, op_state)
@@ -113,7 +109,7 @@ class TestFileAndYAMLBackend:
 class TestJSONBackend:
     def test_load(self, json_backend, json_file):
         dat = json_backend.load(json_file)
-        assert dat.name
+        assert dat.operation_id
 
     def test_save(self, json_backend, json_out, op_state):
         json_backend.save(json_out, op_state)
@@ -156,14 +152,12 @@ class TestJSONBackend:
 
 
 class TestJSONLAppend:
-    def test_append_streaming_behavior(self, tmp_path):
+    def test_append_streaming_behavior(self, tmp_path, jsonl_backend):
         path = tmp_path / "trace.jsonl"
 
-        backend = JSONLBackend(DummyModel, as_list=True)
-
-        backend.append(path, DummyModel(name="a"))
-        backend.append(path, DummyModel(name="b"))
-        backend.append(path, [DummyModel(name="c"), DummyModel(name="d")])
+        jsonl_backend.append(path, DummyModel(name="a"))
+        jsonl_backend.append(path, DummyModel(name="b"))
+        jsonl_backend.append(path, [DummyModel(name="c"), DummyModel(name="d")])
 
         with open(path, "r", encoding="utf-8") as f:
             lines = [json.loads(l_) for l_ in f if l_.strip()]
@@ -171,13 +165,11 @@ class TestJSONLAppend:
         assert len(lines) == 4
         assert [x["name"] for x in lines] == ["a", "b", "c", "d"]
 
-    def test_order_is_preserved(self, tmp_path):
+    def test_order_is_preserved(self, tmp_path, jsonl_backend):
         path = tmp_path / "trace.jsonl"
 
-        backend = JSONLBackend(DummyModel, as_list=True)
-
         for i in range(5):
-            backend.append(path, DummyModel(name=str(i)))
+            jsonl_backend.append(path, DummyModel(name=str(i)))
 
         with open(path, "r", encoding="utf-8") as f:
             names = [json.loads(l_)["name"] for l_ in f]

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from ox_orch.core.state import Status, StateInfo, TreeState, HistoryState, StateYAMLBackend
+from ox_orch.core.state import Status, StateInfo, TreeState, HistoryState
 
 
 class FullState(TreeState, HistoryState):
@@ -14,11 +14,6 @@ def yaml_file(data_dir):
     path = data_dir / "state.backend.test.yaml"
     yield path
     path.unlink(missing_ok=True)
-
-
-@pytest.fixture
-def state_file_backend():
-    return StateYAMLBackend(FullState)
 
 
 @pytest.fixture
@@ -90,23 +85,12 @@ class TestState:
         assert state.error == str(exc)
 
     def test_summary(self, state):
-        assert state.summary() == f"{state.name} (status={state.status})"
+        assert state.summary() == f"{type(state).__name__} (status={state.status})"
 
     def test_summary_with_nested_states(self, state):
-        state.children = [FullState(name="foo", status=Status.RUNNING), FullState(name="bar")]
+        state.children = [FullState(status=Status.RUNNING), FullState()]
         assert state.summary() == (
-            f"{state.name} (status={state.status}):\n"
-            f"- foo (status={Status.RUNNING})\n"
-            f"- bar (status={Status.PENDING})"
+            f"{type(state).__name__} (status={state.status}):\n"
+            f"- FullState (status={Status.RUNNING})\n"
+            f"- FullState (status={Status.PENDING})"
         )
-
-
-class TestStateFileBackend:
-    def test_save_load(self, state_file_backend, yaml_file, state):
-        state.status = Status.FAILED
-        state_file_backend.save(state, yaml_file)
-        assert yaml_file.exists()
-
-        state = state_file_backend.load(yaml_file)
-        assert state.status == Status.FAILED
-        assert state._source == yaml_file

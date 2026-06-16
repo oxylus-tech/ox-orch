@@ -1,11 +1,14 @@
 import inspect
 import logging
 from typing import Callable, Generator, ClassVar, Sequence, Type
+from uuid import uuid4, UUID
+
+from pydantic import Field
 
 
-from ox_orch.core.apps import AppMetadata
+from ox_orch.apps import AppMetadata
 from ox_orch.core.contexts import RunContext, ExecutionContext
-from ox_orch.core.pydantic import CloneBaseModel, LazyTranslation, PolymorphicModel
+from ox_orch.core.pydantic import LazyTranslation, PolymorphicModel
 from ox_orch.core.registry import register, Registry
 from ox_orch.core.state import TreeState, HistoryState, Status
 
@@ -50,8 +53,11 @@ class OperationState(TreeState, HistoryState, PolymorphicModel):
     run_context: RunContext | None = None
     """ Run context of the operation, only set on the root state. """
 
+    def __str__(self):
+        return f"{type(self).__name__}@{self.operation_id} (status={self.status})"
 
-class AbstractOperation(CloneBaseModel, PolymorphicModel):
+
+class AbstractOperation(PolymorphicModel):
     """
     Abstract base class for all install operations.
 
@@ -114,15 +120,19 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
     attribute to True.
     """
 
+    uuid: UUID = Field(default_factory=uuid4)
     label: ClassVar[LazyTranslation] = ""
     """ Human readable text (can be Django lazy translation string) """
+
+    @property
+    def id(self):
+        return f"{self.__type_id__}:{self.uuid}"
 
     def create_state(self, **kwargs) -> OperationState:
         """Return a new initial operation state."""
         return self.__state_class__(
-            operation_id=type(self).__type_id__,
+            operation_id=self.id,
             _operation=self,
-            name=str(type(self).__type_id__),
             **kwargs,
         )
 
@@ -196,9 +206,8 @@ class AbstractOperation(CloneBaseModel, PolymorphicModel):
                 f"Invalid type of state for this operation. Expected {self.__state_class__} "
                 "but we've got {type(state)}"
             )
-        if not state._operation and state.operation_id == type(self).__type_id__:
+        if not state._operation and state.operation_id == self.id:
             state._operation = self
-            state.name = str(type(self).label or type(self).__type_id__)
         elif state._operation != self:
             raise ValueError(f"Status `{state._operation}` does not matches the operation `{self}`.")
 

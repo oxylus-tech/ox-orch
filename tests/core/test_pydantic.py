@@ -1,6 +1,6 @@
 import pytest
 
-from ox_orch.core.pydantic import CloneBaseModel, PolymorphicModel
+from ox_orch.core.pydantic import PolymorphicModel
 from ox_orch.core.registry import register, Registry
 
 
@@ -8,7 +8,7 @@ TEST_REGISTRY = Registry()
 
 
 @register()
-class Model(CloneBaseModel, PolymorphicModel):
+class Model(PolymorphicModel):
     __type_id__ = "model"
     __registry__ = TEST_REGISTRY
 
@@ -40,13 +40,6 @@ def submodel():
 @pytest.fixture
 def unregistered():
     return Unregistered(name="unregistered", value="unregistered value")
-
-
-class TestCloneBaseModel:
-    def test_clone(self, submodel):
-        obj = submodel.clone(value="other value")
-        assert obj.name == submodel.name
-        assert obj.value == "other value"
 
 
 class TestPolymorphicModel:

@@ -9,21 +9,22 @@ from ox_orch.operations.install import (
 
 
 class DummyApp:
-    def __init__(self, app_id, package, version, installed_version=None):
+    def __init__(self, app_id, package, version, installed_version=None, source=None):
         self.id = app_id
         self.package = package
         self.version = version
-        self._installed_version = installed_version
+        self._version = installed_version
+        self.source = source
 
     def get_installed_version(self):
-        return self._installed_version
+        return self._version
 
 
 class DummyInstall(InstallOperation):
     __type_id__ = "tests:op:install:dummy"
 
     def install(self, state, shell, packages, **kwargs):
-        self._last_install = (packages, kwargs)
+        self._last_install = (list(packages), kwargs)
 
     def uninstall(self, state, shell, packages, **kwargs):
         self._last_uninstall = packages
@@ -44,36 +45,27 @@ class TestInstallOperation:
         assert "a" in state.backward
         assert "b" in state.backward
 
-        assert state.packages == {
-            "a": "pkg_a",
-            "b": "pkg_b",
-        }
-
         installed, _ = op._last_install
-        assert installed["pkg_a"] == "1.0"
-        assert installed["pkg_b"] == "2.0"
+        assert installed[0] == {"package": "pkg_a", "source": "pkg_a", "version": "1.0"}
+        assert installed[1] == {"package": "pkg_b", "source": "pkg_b", "version": "2.0"}
 
     def test_rollback_downgrade_and_uninstall(self, exec_ctx):
         op = DummyInstall()
 
         state = InstallState()
-        state.packages = {
-            "a": "pkg_a",
-            "b": "pkg_b",
-        }
         state.backward = {
-            "a": {"installed_version": "1.0"},
-            "b": {"installed_version": None},
+            "a": {"package": "a", "source": "a", "version": "1.0"},
+            "b": {"package": "b", "source": "b", "version": None},
         }
 
         op._rollback(state, exec_ctx, shell=EchoShell())
 
         # uninstall case
-        assert op._last_uninstall == ["pkg_b"]
+        assert op._last_uninstall == ["b"]
 
         # downgrade case
-        packages, _ = op._last_install
-        assert packages["pkg_a"] == "1.0"
+        installed, _ = op._last_install
+        assert installed[0] == {"package": "a", "source": "a", "version": "1.0"}
 
     def test_snapshot_collects_versions(self):
         op = DummyInstall()
@@ -84,48 +76,34 @@ class TestInstallOperation:
 
         snapshot = op._snapshot(apps)
 
-        assert snapshot["a"]["installed_version"] == "0.8"
+        assert snapshot["a"]["version"] == "0.8"
 
 
 class TestPipInstall:
-    def test_get_forward(self):
+    def test_get_forward(self, shell):
         op = PipInstall()
         state = InstallState()
 
-        cmd = op.get_forward(
-            state,
-            {"pkg_a": "1.0", "pkg_b": None},
-            options=["--upgrade"],
-        )
+        cmd = op.get_forward(state, shell, ["pkg_a==1.0", "pkg_b"], options=["--upgrade"])
 
-        assert cmd[0:3] == ["pip", "install", "--upgrade"]
-        assert "pkg_a==1.0" in cmd
-        assert "pkg_b" in cmd
+        assert cmd == [shell.spec.python, "-m", "pip", "install", "--upgrade", "pkg_a==1.0", "pkg_b"]
 
 
 class TestUvInstall:
-    def test_get_forward(self):
+    def test_get_forward(self, shell):
         op = UvInstall()
         state = InstallState()
 
-        cmd = op.get_forward(
-            state,
-            {"pkg_a": "1.0"},
-        )
-
+        cmd = op.get_forward(state, shell, ["pkg_a==1.0"])
         assert cmd[0:3] == ["uv", "pip", "install"]
         assert "pkg_a==1.0" in cmd
 
 
 class TestPoetryInstall:
-    def test_get_forward(self):
+    def test_get_forward(self, shell):
         op = PoetryInstall()
         state = InstallState()
 
-        cmd = op.get_forward(
-            state,
-            {"pkg_a": "1.0"},
-        )
-
-        assert cmd[0:2] == ["poetry", "add"]
-        assert "pkg_a@1.0" in cmd
+        cmd = op.get_forward(state, shell, ["pkg_a==1.0"])
+        assert cmd[0:4] == ["poetry", "run", "pip", "install"]
+        assert "pkg_a==1.0" in cmd

@@ -1,0 +1,245 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Generic, TypeVar, Iterable, Type
+
+from pydantic import BaseModel, Field, TypeAdapter
+
+
+from .files import FileBackend, JSONBackend
+
+
+__all__ = ("StoreMetadata", "Store", "MemoryStore", "FileStoreModel", "FileStore")
+
+
+K = TypeVar("K")
+V = TypeVar("V", bound=BaseModel | TypeAdapter)
+
+
+class StoreNotFoundError(KeyError):
+    """
+    Error raised when one or multiple items couldn't be found in the store.
+    """
+
+    missing_keys: list[K]
+    """ Missing items keys. """
+
+    def __init__(self, missing_keys: list[K], msg=None, **kwargs):
+        if not msg:
+            msg = f"The following items could not be found: {', '.join(missing_keys)}"
+        self.missing_keys = missing_keys
+        super().__init__(msg, **kwargs)
+
+
+class StoreMetadata(BaseModel):
+    """
+    Structured metadata attached to a persistent store.
+
+    This is persisted alongside stored data and can be used for:
+    - versioning
+    - cache invalidation
+    - debugging
+    - reconciliation tracking
+    """
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    version: str | None = None
+    backend: str | None = None
+
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class Store(ABC, Generic[K, V]):
+    """
+    Generic key-value store abstraction.
+
+    This is responsible for:
+    - access semantics (get/commit/delete)
+    - in-memory structure (not persistence)
+    """
+
+    model_class: Type[BaseModel] | None = None
+    key: str = "id"
+
+    def __init__(self, model_class: Type[BaseModel] | None = None, key: str | None = None):
+        if model_class:
+            self.model_class = model_class
+        if key:
+            self.key = key
+
+        if not (self.model_class and self.key):
+            raise ValueError("Model class or key is not provided for this store.")
+
+        if self.key not in self.model_class.model_fields:
+            raise ValueError(f"Key field `{self.key}` not found on {self.model_class.__name__}")
+
+    @abstractmethod
+    def get_metadata(self) -> StoreMetadata | None:
+        """Return store metadata."""
+        pass
+
+    @abstractmethod
+    def get(self, key: K, exc: bool = False) -> V | None:
+        """
+        Get an item by key.
+
+        :param key: Item key.
+        :param exc: If True, raises :py:class:`StoreNotFoundError`
+        :raises StoreNotFoundError: item was not found and ``exc=True``
+        """
+        pass
+
+    def get_all(self, keys: Iterable[K], exc: bool = False) -> list[V]:
+        """
+        Get items by keys.
+
+        Default implementation loops over keys and calls :py:meth:`get`
+
+        :param keys: Item keys.
+        :param exc: If True, raises :py:class:`StoreNotFoundError`
+        :raises StoreNotFoundError: item was not found and ``exc=True``
+        """
+        items = []
+        missing = [] if exc else None
+
+        for key in keys:
+            item = self.get(key, False)
+            match item:
+                case BaseModel():
+                    items.append(item)
+                case None if exc:
+                    missing.append(item)
+
+        if missing:
+            raise StoreNotFoundError(missing)
+
+        return items
+
+    @abstractmethod
+    def commit(self, items: Iterable[V]) -> None:
+        """Update items."""
+        pass
+
+    @abstractmethod
+    def partial_commit(self, updates: dict[K, dict[str, Any] | None], allow_create: bool = False):
+        """
+        Partial update of items, provided as dict of updates by object key.
+
+        When the value is None, then related object is removed from the
+        store.
+        When object is not present, either create new one (on ``allow_create``)
+        or raises a ``KeyError``.
+        """
+        pass
+
+    @abstractmethod
+    def delete(self, key: K) -> None:
+        """Delete item from the store."""
+        pass
+
+    def get_key(self, item) -> K:
+        return getattr(item, self.key)
+
+
+class MemoryStore(Store[K, V]):
+    """Simple in-memory store implementation."""
+
+    data: dict[K, V]
+
+    def __init__(self, model_class: BaseModel | None = None, key: str | None = None, items: Iterable[V] | None = None):
+        super().__init__(model_class, key)
+        self.metadata = StoreMetadata()
+        self.data = {}
+        if items:
+            self.commit(items)
+
+    def get_metadata(self):
+        return self.metadata
+
+    def get(self, key: K, exc=None) -> V | None:
+        # FIXME: model_copy?
+        return self.data.get(key)
+
+    def commit(self, items: Iterable[V] | None) -> None:
+        self.data.update((self.get_key(item), item) for item in items)
+
+    def partial_commit(self, updates, allow_create: bool = False):
+        for key, data in updates.items():
+            if data is None:
+                self.delete(key)
+                continue
+
+            if self.key in data and data[self.key] != key:
+                raise ValueError(f"Inconsistent key vs payload one: {key} != {data[self.key]}")
+
+            obj = self.data.get(key)
+            if not obj:
+                if not allow_create:
+                    raise KeyError(f"Object not found for key: {key}")
+                data = {**data, self.key: key}
+                self.data[key] = self.model_class(**data)
+            else:
+                for field, value in data.items():
+                    setattr(obj, field, value)
+
+    def delete(self, key: K) -> None:
+        self.data.pop(key, None)
+
+
+class FileStoreModel(BaseModel, Generic[K, V]):
+    """
+    Persistent representation of a Store.
+
+    This is what is serialized to disk.
+    """
+
+    data: dict[Any, Any] = Field(default_factory=dict)
+    metadata: StoreMetadata = Field(default_factory=StoreMetadata)
+
+
+class FileStore(MemoryStore[K, V]):
+    """
+    Persistent store backed by a file backend.
+
+    Serialization is delegated to FileBackend.
+    """
+
+    backend: FileBackend = JSONBackend(FileStoreModel)
+
+    def __init__(
+        self,
+        path: Path,
+        model_class: Type[BaseModel] | None = None,
+        *args,
+        backend: FileBackend | None = None,
+        **kwargs,
+    ):
+        super().__init__(model_class, *args, **kwargs)
+
+        if backend:
+            self.backend = backend
+        self.path = path
+
+        if not issubclass(self.backend.model_class, FileStoreModel):
+            raise TypeError("File backend model class does not subclasses FileStoreModel")
+        if self.backend.as_list:
+            raise ValueError("File backend can not be configured for lists (as_list).")
+
+    def load(self) -> None:
+        if not self.path.exists():
+            return
+
+        model = self.backend.load(self.path)
+        self.data = {key: self.model_class(**dat) for key, dat in model.data.items()}
+        self.metadata = model.metadata
+
+    def save(self) -> None:
+        model = self.backend.model_class(
+            data=self.data,
+            metadata=self.metadata,
+        )
+        self.backend.save(self.path, model)

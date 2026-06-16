@@ -22,12 +22,12 @@ class TestPlan:
         assert_states(
             states,
             [
-                (plan.__type_id__, Status.RUNNING),
-                (op.__type_id__, Status.RUNNING),
-                (op.__type_id__, Status.COMPLETED),
-                (op_1.__type_id__, Status.RUNNING),
-                (op_1.__type_id__, Status.COMPLETED),
-                (plan.__type_id__, Status.COMPLETED),
+                (plan.id, Status.RUNNING),
+                (op.id, Status.RUNNING),
+                (op.id, Status.COMPLETED),
+                (op_1.id, Status.RUNNING),
+                (op_1.id, Status.COMPLETED),
+                (plan.id, Status.COMPLETED),
             ],
         )
 
@@ -40,14 +40,14 @@ class TestPlan:
         assert_states(
             states,
             [
-                (plan.__type_id__, Status.RUNNING),
-                (op.__type_id__, Status.RUNNING),
-                (op.__type_id__, Status.FAILED, exc),
-                (plan.__type_id__, Status.FAILED, exc),
-                (plan.__type_id__, Status.ROLLING_BACK),
-                (op.__type_id__, Status.ROLLING_BACK),
-                (op.__type_id__, Status.ROLLED_BACK),
-                (plan.__type_id__, Status.ROLLED_BACK),
+                (plan.id, Status.RUNNING),
+                (op.id, Status.RUNNING),
+                (op.id, Status.FAILED, exc),
+                (plan.id, Status.FAILED, exc),
+                (plan.id, Status.ROLLING_BACK),
+                (op.id, Status.ROLLING_BACK),
+                (op.id, Status.ROLLED_BACK),
+                (plan.id, Status.ROLLED_BACK),
             ],
         )
 
@@ -66,12 +66,12 @@ class TestPlan:
         assert_states(
             states,
             [
-                (plan.__type_id__, Status.ROLLING_BACK),
-                (op.__type_id__, Status.ROLLING_BACK),
-                (op.__type_id__, Status.ROLLED_BACK),
-                (op_1.__type_id__, Status.ROLLING_BACK),
-                (op_1.__type_id__, Status.ROLLED_BACK),
-                (plan.__type_id__, Status.ROLLED_BACK),
+                (plan.id, Status.ROLLING_BACK),
+                (op_1.id, Status.ROLLING_BACK),
+                (op_1.id, Status.ROLLED_BACK),
+                (op.id, Status.ROLLING_BACK),
+                (op.id, Status.ROLLED_BACK),
+                (plan.id, Status.ROLLED_BACK),
             ],
         )
 
@@ -88,10 +88,10 @@ class TestPlan:
         assert_states(
             states,
             [
-                (plan.__type_id__, Status.ROLLING_BACK),
-                (op.__type_id__, Status.ROLLING_BACK),
-                (op.__type_id__, Status.FAILED, exc),
-                (plan.__type_id__, Status.FAILED, exc),
+                (plan.id, Status.ROLLING_BACK),
+                (op_1.id, Status.ROLLING_BACK),
+                (op_1.id, Status.FAILED, exc),
+                (plan.id, Status.FAILED, exc),
             ],
         )
 

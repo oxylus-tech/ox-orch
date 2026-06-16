@@ -2,11 +2,12 @@ from pathlib import Path
 from importlib import metadata
 
 import pytest
-from pydantic import PrivateAttr
+from pydantic import PrivateAttr, BaseModel
 
-from ox_orch.core import app_registry, files
-from ox_orch.core.contexts import ExecutionContext
-from ox_orch.core.apps import AppMetadata, AppInstallState
+from ox_orch.core import files
+from ox_orch.core import ExecutionContext
+from ox_orch.core.shell import EchoShell, ShellSpec
+from ox_orch.apps import AppMetadata, AppState, AppMemoryStore, AppStateMemoryStore
 from ox_orch.operations import AbstractOperation, OperationState
 from ox_orch.operations.install import InstallOperation
 
@@ -53,14 +54,22 @@ class FakeInstall(InstallOperation):
     def uninstall(self, state, shell, packages, **_):
         self._last_uninstall = packages
 
-    def _snapshot(self, apps):
+    def _snapshot(self, apps, dry_run=False):
         if not self._called:
             versions = package_versions
             self._called = True
         else:
             versions = package_next_versions
 
-        return {app.id: {"installed_version": versions[app.package]} for app in apps}
+        return {
+            app.id: {"package": app.package, "version": versions[app.package], "source": app.source or app.package}
+            for app in apps
+        }
+
+
+class DummyModel(BaseModel):
+    name: str
+    value: int = 0
 
 
 @pytest.fixture
@@ -128,7 +137,7 @@ def app_dep(app_meta, app_meta_1):
         name="PyYaml",
         version=package_next_versions["pyyaml"],
         package="pyyaml",
-        dependencies=[app_meta.id, app_meta_1.id],
+        dependencies=[f"{app_meta.id}@{app_meta.version}", f"{app_meta_1.id}@{app_meta_1.version}"],
     )
 
 
@@ -139,8 +148,8 @@ def app_dep_1(app_meta, app_dep):
         name="Black",
         version=package_versions["black"],
         package="black",
-        state=AppInstallState(installed_version=package_versions["black"]),
-        dependencies=[app_meta.id, app_dep.id],
+        # state=AppState(version=package_versions["black"]),
+        dependencies=[f"{app_meta.id}@{app_meta.version}", f"{app_dep.id}@{app_dep.version}"],
     )
 
 
@@ -150,11 +159,20 @@ def app_metas(app_meta, app_meta_1, app_dep, app_dep_1):
 
 
 @pytest.fixture
-def mem_registry(app_metas):
-    # enforce misordering for iteration and search tests
-    return app_registry.MemoryAppRegistry(apps=list(reversed(app_metas)))
+def app_store(app_metas):
+    return AppMemoryStore(items=list(app_metas))
+
+
+@pytest.fixture
+def app_state_store(app_dep_1):
+    return AppStateMemoryStore(items=[AppState(id=app_dep_1.id, version=app_dep_1.version, package=app_dep_1.package)])
 
 
 @pytest.fixture
 def exec_ctx():
     return ExecutionContext()
+
+
+@pytest.fixture
+def shell():
+    return EchoShell(ShellSpec(backend="echo"))

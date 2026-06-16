@@ -1,11 +1,11 @@
-from typing import Generator, Optional
+from typing import Generator
 
 from ox_orch.core.contexts import ExecutionContext
-from ox_orch.core.state import StateBackend, Status
+from ox_orch.core.state import Status
 
 from .base import OPERATION_REGISTRY, STATE_REGISTRY, RunContext, OperationState, AbstractOperation, RunPython
 from .plan import Plan
-from .apps import AppPlanState, AppPlan, ReconciliationPlan, AppsPlan
+from .apps import AppsContext, AppPlanState, AppPlan, ReconciliationPlan, AppsPlan
 from .subprocess import SubprocessOperation
 
 
@@ -19,6 +19,7 @@ __all__ = (
     "RunPython",
     # Plan
     "Plan",
+    "AppsContext",
     "AppPlan",
     "AppPlanState",
     "ReconciliationPlan",
@@ -34,7 +35,7 @@ def apply(
     operation: AbstractOperation,
     state: OperationState,
     ctx: ExecutionContext | None = None,
-    state_backend: Optional[StateBackend] = None,
+    # state_backend: Optional[StateBackend] = None,
     **kwargs
 ) -> Generator[OperationState, None, None]:
     """
@@ -47,7 +48,7 @@ def apply(
     """
     ctx = ctx or ExecutionContext()
     for state_ in operation.apply(state, ctx, **kwargs):
-        state_backend and state_backend.save(state_)
+        # state_backend and state_backend.save(state_)
         yield state
 
 
@@ -55,7 +56,7 @@ def rollback(
     operation: AbstractOperation,
     state: OperationState,
     ctx: ExecutionContext | None = None,
-    state_backend: Optional[StateBackend] = None,
+    # state_backend: Optional[StateBackend] = None,
     **kwargs
 ) -> Generator[OperationState, None, None]:
     """
@@ -68,7 +69,7 @@ def rollback(
     """
     ctx = ctx or ExecutionContext()
     for state_ in operation.rollback(state, ctx, **kwargs):
-        state_backend and state_backend.save(state_)
+        # state_backend and state_backend.save(state_)
         yield state
 
 

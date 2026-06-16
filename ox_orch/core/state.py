@@ -1,13 +1,10 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from enum import StrEnum
-from pathlib import Path
-from typing import Any, ClassVar, Optional, Type
+from typing import Any, ClassVar, Optional, Iterable
+from uuid import UUID, uuid4
 
-from pydantic import Field
-
-from . import files
-from .pydantic import CloneBaseModel
+from pydantic import BaseModel, Field
 
 
 __all__ = (
@@ -17,10 +14,7 @@ __all__ = (
     "State",
     "HistoryState",
     "TreeState",
-    "StateBackend",
-    "StateFileBackend",
-    "StateYAMLBackend",
-    "StateJSONBackend",
+    "ChangeSet",
 )
 
 
@@ -60,14 +54,14 @@ STATUS_LABELS = {
 """ Label for statuses. """
 
 
-class StateInfo(CloneBaseModel):
+class StateInfo(BaseModel):
     """
     Base state informations, as stored in :py:attr:`State.history`.
     """
 
     status: Status
     """ Current status. """
-    error: Optional[str] = None
+    error: str | None = None
     """ Error string (on failure). """
     updated: datetime
     """ Last update datetime. """
@@ -80,10 +74,10 @@ class State(StateInfo):
     You MUST provide :py:attr:`_transitions` class attribute on subclasses.
     """
 
+    id: UUID = Field(default_factory=uuid4)
     status: Status = Status.PENDING
     """ Current status. """
-    name: str = ""
-    """ State name, """
+    # FIXME: remove?
     error: str | None = None
     """ Error string (on failure). """
     updated: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -94,7 +88,7 @@ class State(StateInfo):
     _transitions: ClassVar[dict[str, set[str]]] = {
         Status.PENDING: {Status.RUNNING, Status.FAILED},
         Status.RUNNING: {Status.FAILED, Status.COMPLETED},
-        Status.ROLLING_BACK: {Status.ROLLED_BACK, Status.FAILED},
+        Status.ROLLING_BACK: {Status.COMPLETED, Status.ROLLED_BACK, Status.FAILED},
         Status.COMPLETED: {Status.ROLLING_BACK},
         Status.FAILED: {Status.ROLLING_BACK},
         Status.ROLLED_BACK: {},
@@ -163,7 +157,7 @@ class State(StateInfo):
         return str(self)
 
     def __str__(self):
-        return f"{self.name or type(self).__name__} (status={self.status})"
+        return f"{type(self).__name__} (status={self.status})"
 
 
 class HistoryState(State):
@@ -247,83 +241,93 @@ class TreeState(State):
         return "\n".join(lines)
 
 
-class StateBackend:
+Changes = dict[str, Any]
+
+
+class ChangeSet(BaseModel):
     """
-    Backend interface used to load and store states.
+    Keep track of multiple objects changes.
 
-    Notes:
+    Workflow:
 
-        - the StateBackend should set the :py:attr:`State._source` attribute
-          to know where to store the
-    """
-
-    state_class: Type[State] = State
-    """ Operation state class to use for loading and instanciating. """
-
-    def __init__(self, state_class: Type[State] | None = None):
-        if state_class is not None:
-            self.state_class = state_class
-
-    def load(self, source: Any) -> State | None:
-        """
-        Load or reload state from the backend.
-        """
-        return self.state
-
-    def save(self, state: State = None, target: Any = None):
-        """
-        Save state in the backend, to target (defaults to :py:attr:`State._source`).
-
-        .. note::
-
-            The provided state can be a nested one from the root one, so if
-            you need to save the whole tree at once, you can use the
-            :py:attr:`State._root` attribute.
-
-        """
-        pass
-
-    def delete(self, state):
-        """Drop state from storage."""
-        pass
-
-
-class StateFileBackend(StateBackend):
-    """Load and save state to provided file path.
-
-    You must provide a :py:class:`~ox_orch.core.files.FileBackend`
-    subclass to handle file writing and saving.
-    If you're too lazy (which is good), you can use :py:class:`StateYAMLBackend`
-    or :py:class:`StateJSONBackend` instead.
+        - :py:meth:`add_change`: add forward changes for an object by reference;
+        - :py:meth:`set_backward`: using the provided object, compute backward diff;
+        - :py:meth:`validate_changes`: validate all diff inputs;
     """
 
-    def __init__(self, backend_class: Type[files.FileBackend], state_class: Type[State] | None = None):
-        super().__init__(state_class)
-        self.backend = backend_class(self.state_class)
+    backward: dict[Any, Changes] = Field(default_factory=dict)
+    """ Initial application states. """
+    forward: dict[Any, Changes] = Field(default_factory=dict)
+    """ Application states updates to commit on success. """
 
-    def load(self, source: Path):
-        obj = self.backend.load(source)
-        obj._source = source
-        return obj
+    def merge(self, other: ChangeSet):
+        """
+        Extend self with the provided change-set.
 
-    def save(self, state: State, target: Optional[str | Path] = None):
-        """Save state to YAML file."""
-        root = state._root or state._parent or state
-        target = target and Path(target) or state._source
-        if not target:
-            raise ValueError("No target provided and no source on State")
-        self.backend.save(target, root)
+        .. important::
 
+            Nested dictionaries wont be merge if another value is provided.
+            It instead will be overriden by the latest one.
+        """
 
-class StateYAMLBackend(StateFileBackend):
-    """State backend storing to YAML file."""
+        for ref, values in other.forward.items():
+            self.add_changes(ref, values)
 
-    def __init__(self, state_class: Type[State] | None = None):
-        super().__init__(files.YAMLBackend, state_class)
+        for ref, values in other.backward.items():
+            if values is None:
+                self.backward[ref] = None
+            else:
+                self.backward.setdefault(ref, {}).update(values)
 
+    def merge_from(self, change_sets: Iterable[ChangeSet]):
+        """Merge multiple change sets into self."""
+        for cs in change_sets:
+            self.merge(cs)
 
-class StateJSONBackend(StateFileBackend):
-    """State backend storing to JSON file."""
+    def add_changes(self, ref, values):
+        """
+        Register update values for an object by reference.
 
-    def __init__(self, state_class: Type[State] | None = None):
-        super().__init__(files.JSONBackend, state_class)
+        It only store the forward change. To provide the
+
+        """
+        if not values:
+            return
+
+        if ref not in self.forward:
+            self.forward[ref] = values
+        else:
+            self.forward[ref].update(values)
+
+    def set_backward(self, ref, obj: BaseModel | None):
+        """
+        Compute backward diff for the provided original object.
+
+        If not change is found, do nothing.
+        """
+        forward = self.forward.get(ref)
+        if not forward:
+            return
+
+        if obj is None:
+            backward = None
+        else:
+            backward = {key: getattr(obj, key, None) for key in forward.keys()}
+
+        self.backward[ref] = backward
+
+    def validate_changes(self):
+        if self.forward.keys() != self.backward.keys():
+            raise ValueError(
+                "Inconsistent references between backward and forward changes."
+                "Did you forget to register some backward object?"
+            )
+
+        # for key, forward in self.forward.items():
+        #     backward = self.backward[key]
+        #     if backward is not None and backward.keys() != forward.keys():
+        #         fields = set(backward.keys()) ^ set(forward.keys())
+        #         raise ValueError(
+        #             "Backward and forward Fields dont match. Mismatchs:" +
+        #             ", ".join(fields)
+        #         )

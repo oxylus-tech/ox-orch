@@ -70,11 +70,12 @@ class Executor(HookEmitter):
     hook_class = ExecutorHook
     hook_registry = EXECUTOR_HOOK_REGISTRY
 
-    def apply(self, spec: ExecutionSpec) -> Generator[State, State]:
+    def apply(self, spec: ExecutionSpec, **inputs) -> Generator[State, State]:
         """
         Execute an operation using the provided configuration.
 
         :param spec: the configuration;
+        :param inputs: extra context inputs;
         :returns: root state
         :raises ExecutionError: on failure
         """
@@ -86,7 +87,7 @@ class Executor(HookEmitter):
             shell=Shell.from_spec(spec.shell),
             # data=spec.context
         )
-        inputs = spec.inputs
+        inputs = {**spec.inputs, **inputs}
         operation = spec.operation
         state = operation.create_state(run_context=run_context)
 
@@ -111,7 +112,7 @@ class Executor(HookEmitter):
             self.emit("apply_failed", operation, state, exc)
             raise ExecutionError(str(exc)) from exc
 
-    def rollback(self, spec: ExecutionSpec, state: OperationState) -> Generator[State, State]:
+    def rollback(self, spec: ExecutionSpec, state: OperationState, **inputs) -> Generator[State, State]:
         """
         Rollback an operation.
 
@@ -120,6 +121,7 @@ class Executor(HookEmitter):
 
         :param spec: execution configuration;
         :param state: operation state to rollback;
+        :param inputs: extra context inputs;
         :returns: root state
         :raises ExecutionError: on failure
         """
@@ -134,7 +136,7 @@ class Executor(HookEmitter):
         self.emit("before_rollback", operation, state, ctx)
 
         try:
-            for state in operation.rollback(state, ctx):
+            for state in operation.rollback(state, ctx, **inputs):
                 self.emit("state_update", state=state)
                 yield state
 

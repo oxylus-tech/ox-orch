@@ -61,7 +61,6 @@ class ProgressHook(ExecutorHook):
         self.last_state = {
             "operation_id": getattr(state, "operation_id", None),
             "state_type": state.__type_id__,
-            "name": state.name,
             "status": str(state.status),
         }
 

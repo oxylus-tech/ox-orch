@@ -1,22 +1,29 @@
 from __future__ import annotations
+from dataclasses import dataclass
 import logging
 from typing import Any, Iterable, Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
-from ..utils import merge_nested_dicts
-from ox_orch.core.apps import AppMetadata
-from ox_orch.core.app_registry import AppRegistry, AppStateDiffs
-from ox_orch.core.registry import register
-from ox_orch.core.state import Status
+from ox_orch.apps import AppMetadata, AppStore, AppStateStore
+from ox_orch.core import register, Status, ChangeSet
 from .base import AbstractOperation
 from .plan import Plan, PlanState
 
 
-__all__ = ("AppPlanState", "AppPlan", "ReconciliationPlan", "AppsPlan")
+__all__ = ("AppsContext", "AppPlanState", "AppPlan", "ReconciliationPlan", "AppsPlan")
 
 
 logger = logging.getLogger()
+
+
+@dataclass
+class AppsContext:
+    """Context provided to app related operation."""
+
+    apps: list[AppMetadata]
+    store: AppStore
+    state_store: AppStateStore
 
 
 @register("app")
@@ -29,9 +36,9 @@ class AppPlanState(PlanState):
     """ Application metadata used for install. """
     target_version: str
     """ Version expected by registry update. """
-    installed_version: str
+    version: str
     """ Version detected in environment before execution. """
-    state_facts: dict[str, Any] = Field(default_factory=dict)
+    facts: dict[str, Any] = Field(default_factory=dict)
     """
     Application's state changes that will be committed to apps registry
     once whole installation is done.
@@ -58,7 +65,7 @@ class AppPlan(Plan):
             app_id=self.app.id,
             app=self.app,
             target_version=self.app.version,
-            installed_version=self.app.get_installed_version(),
+            version=self.app.get_installed_version(),
             **kwargs,
         )
 
@@ -69,7 +76,7 @@ class AppPlan(Plan):
 
 
 @register("reconciliation")
-class ReconciliationState(AppStateDiffs, PlanState):
+class ReconciliationState(ChangeSet, PlanState):
     """State for the reconciliation of applications."""
 
     pass
@@ -85,43 +92,48 @@ class ReconciliationPlan(AbstractOperation):
     """
 
     __state_class__ = ReconciliationState
-    __apply_spec__ = ("apps",)
+    __apply_spec__ = ("apps_ctx",)
+    __full_inputs__ = True
 
     app_plan: AppPlan
 
-    def _apply(self, state, ctx, apps: Iterable[AppMetadata], apps_registry: AppRegistry | None = None, **inputs):
+    def _apply(self, state, ctx, apps_ctx: AppsContext, **inputs):
+        apps = apps_ctx.apps
         if not apps:
             return
 
-        registry = inputs.get("app_registry")
-        if registry:
-            apps = registry.get_full([a.id for a in apps])
+        if store := apps_ctx.store:
+            apps = store.resolve([a.ref for a in apps])
 
         # 1. Detect package version drift in environment.
-        dirty = self.get_dirty_apps(apps)
+        dirty = self.get_dirty_apps(apps, apps_ctx.state_store)
 
         if not apps:
             return
 
         # 2. Reconcile
         for app in dirty:
-            op = self.app_plan.clone(app=app.clone())
+            op = self.app_plan.model_copy(update={"app": app.model_copy(deep=True)})
             op_state = op.create_state()
             state.children.append(op_state)
 
-            yield from op.apply(op_state, ctx, app=app, **inputs)
+            yield from op.apply(op_state, ctx, app=app, apps_ctx=apps_ctx, **inputs)
 
         # 3. Collect registry update
         for op_state in state.children:
-            kw = {**op_state.state_facts, "status": Status.COMPLETED}
-            state.add_update(op_state.app, **kw)
+            kw = {
+                **op_state.facts,
+                "status": Status.COMPLETED,
+                "package": op_state.app.package,
+            }
+            state.add_changes(op_state.app.id, kw)
 
         # 4. Ensure all apps are enabled on enable
         # if inputs.get("app_enable"):
         #    for app in apps:
         #        state.add_update(app, enabled=True)
 
-    def get_dirty_apps(self, apps: Iterable[AppMetadata]) -> list[AppMetadata]:
+    def get_dirty_apps(self, apps: Iterable[AppMetadata], state_store: AppStateStore) -> list[AppMetadata]:
         """
         Get applications that have been updated in the environment.
 
@@ -131,11 +143,16 @@ class ReconciliationPlan(AbstractOperation):
 
         for app in apps:
             if actual_version := app.get_installed_version():
-                stored_version = app.state and app.state.installed_version or None
+                app_state = state_store.get(app.id)
+                stored_version = app_state and app_state.version or None
                 if actual_version != stored_version:
                     changed.append(app)
 
         return changed
+
+
+class AppsState(ChangeSet, PlanState):
+    pass
 
 
 @register("apps")
@@ -150,39 +167,67 @@ class AppsPlan(Plan):
         - Update registry with the installed versions
     """
 
-    __apply_spec__ = {"apps": (list, None), "app_registry": (AppRegistry, None)}
-    __rollback_spec__ = {"apps": (list, None), "app_registry": (AppRegistry, None)}
+    __apply_spec__ = {"apps_ctx": AppsContext}
+    __rollback_spec__ = {"apps_ctx": AppsContext}
+    __state_class__ = AppsState
 
     install: AbstractOperation
     """ Installation plan (as PipInstall). """
     reconciliation: ReconciliationPlan
-    """ Implicit update plan. """
+    """
+    Implicit update plan that will be run for each updated application.
+
+    You can provide it as a list of operations, as:
+
+    .. code-block:: python
+
+        AppsPlan(
+            install=UvInstall(),
+            reconciliation=[
+                Migrations(),
+                Enable(),
+            ]
+        )
+
+    """
     before_install: list[AbstractOperation] = Field(default_factory=list)
     """ Operations to run before packages installation. """
     after_install: list[AbstractOperation] = Field(default_factory=list)
     """ Operations to run before packages installation. """
+    after_reconciliation: list[AbstractOperation] = Field(default_factory=list)
+    """ Operations to run after applications reconciliation. """
+
+    @field_validator("reconciliation", mode="before")
+    @classmethod
+    def build_reconciliation(cls, value):
+        if isinstance(value, ReconciliationPlan):
+            return value
+
+        return ReconciliationPlan(operations=value)
 
     def get_operations(self, state):
-        return [*self.before_install, self.install, *self.after_install, self.reconciliation]
+        return [
+            *self.before_install,
+            self.install,
+            *self.after_install,
+            self.reconciliation,
+            *self.after_reconciliation,
+        ]
 
-    def _apply(self, state, ctx, apps: list[AppMetadata], app_registry: AppRegistry, **inputs):
-        yield from super()._apply(state, ctx, apps=apps, app_registry=app_registry, **inputs)
-        self.sync_registry(state, app_registry)
+    def _apply(self, state, ctx, apps_ctx: AppsContext, **inputs):
+        yield from super()._apply(state, ctx, apps_ctx=apps_ctx, apps=apps_ctx.apps, **inputs)
 
-    def _rollback(self, state, ctx, apps: list[AppMetadata], app_registry: AppRegistry, **inputs):
-        yield from super()._rollback(state, ctx, apps=apps, app_registry=app_registry, **inputs)
-        self.sync_registry(state, app_registry, "backward")
+        state_store = apps_ctx.state_store
+        state.merge_from(cs for cs in state.children if isinstance(cs, ChangeSet))
+        app_states = {s.id: s for s in state_store.get_all(state.forward.keys())}
+        for key, values in state.forward.items():
+            state.set_backward(key, app_states.get(key))
 
-    def sync_registry(self, state, registry, direction="forward"):
-        if direction not in ("forward", "backward"):
-            raise ValueError('Direction must be either "forward" or "backward"')
+        if state.forward:
+            state_store.partial_commit(state.forward, allow_create=True)
 
-        diffs = []
-        for child_state in state.children:
-            if isinstance(child_state, AppStateDiffs):
-                child_state.validate_diffs()
-                diffs.append(getattr(child_state, direction))
+    def _rollback(self, state, ctx, apps_ctx: AppsContext, **inputs):
+        yield from super()._rollback(state, ctx, apps_ctx=apps_ctx, **inputs)
 
-        updates = merge_nested_dicts(*diffs)
-        if updates:
-            registry.commit(updates)
+        if state.backward:
+            apps_ctx.state_store.partial_commit(state.backward, allow_create=True)

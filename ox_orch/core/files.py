@@ -51,6 +51,11 @@ class FileBackend(ABC):
 
     def save(self, path: Path, obj: BaseModel | list[BaseModel]):
         """Save store to the provided path."""
+        if isinstance(obj, (list, tuple)):
+            all(self._assert_obj_type(o) for o in obj)
+        else:
+            self._assert_obj_type(obj)
+
         with open(path, "w", encoding="utf-8") as f:
             if self.as_list:
                 if not isinstance(obj, (list, tuple)):
@@ -59,6 +64,10 @@ class FileBackend(ABC):
             else:
                 dump = obj.model_dump(mode="json")
             self.write(f, dump)
+
+    def _assert_obj_type(self, obj):
+        if not isinstance(obj, self.model_class):
+            raise ValueError(f"Provided object {obj} is not a subclass of {self.model_class}")
 
     def append(self, path: Path, obj: BaseModel):
         """
@@ -126,7 +135,15 @@ class JSONBackend(FileBackend):
 
 
 class JSONLBackend(FileBackend):
-    """Load data saved as JSON lines file."""
+    """
+    Load data saved as JSON lines file.
+
+    This is always used for list, never for a single item.
+    """
+
+    def __init__(self, model_class):
+        # Ensure to always be a list.
+        super().__init__(model_class, False)
 
     def parse(self, f):
         return [json.loads(line) for line in f if line.strip()]

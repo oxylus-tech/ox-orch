@@ -2,7 +2,7 @@ __type_id__: operation
 config:
     error: null
     history: []
-    name: operation
+    operation_id: "test:operation:1"
     state: pending
     children: []
     updated: '2026-02-07T16:41:04.172394Z'

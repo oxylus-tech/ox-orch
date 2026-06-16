@@ -2,9 +2,9 @@
     "__type_id__": "operation",
     "config": {
         "state": "pending",
+        "operation_id": "test:operation:1",
         "updated": "2026-02-07T16:41:04.175389Z",
         "error": null,
-        "name": "operation",
         "children": [],
         "history": []
     }
