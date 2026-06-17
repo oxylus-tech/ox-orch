@@ -9,7 +9,7 @@ from ox_orch.core.stores import Store
 from ox_orch.core.registry import Registry, RegisteredClass, register
 
 
-__all__ = ("ExecutorHook", "RecordingHook", "PersistStateHook")
+__all__ = ("EXECUTOR_HOOK_REGISTRY", "ExecutorHook", "RecordingHook", "PersistStateHook")
 
 
 EXECUTOR_HOOK_REGISTRY = Registry()

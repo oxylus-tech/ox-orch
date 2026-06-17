@@ -3,16 +3,33 @@ from datetime import datetime
 from enum import Enum
 
 
-from ox_orch.core import stores
+from ox_orch.core import stores, Registry, PolymorphicModel
 from .app import Versioned
 
 
-__all__ = ("InstallOrigin", "AppState", "AppStateStore", "AppStateMemoryStore", "AppStateFileStore")
+__all__ = (
+    "InstallOrigin",
+    "APP_STATE_FEATURE_REGISTRY",
+    "AppFeatureState",
+    "AppState",
+    "AppStateStore",
+    "AppStateMemoryStore",
+    "AppStateFileStore",
+)
 
 
 class InstallOrigin(Enum):
     USER = "user"
     DEPENDENCY = "dependency"
+
+
+APP_STATE_FEATURE_REGISTRY = Registry()
+
+
+class AppFeatureState(PolymorphicModel):
+    """State information of an extension for an application."""
+
+    __registry__ = APP_STATE_FEATURE_REGISTRY
 
 
 class AppState(Versioned):

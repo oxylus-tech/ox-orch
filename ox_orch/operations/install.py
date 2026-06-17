@@ -18,7 +18,7 @@ from typing import Iterable
 from ox_orch.core import ExecutionContext, register
 from ox_orch.core.state import ChangeSet
 
-from .base import OperationState, AbstractOperation
+from .base import OperationState, Operation
 from .subprocess import SubprocessMixin
 
 
@@ -38,7 +38,7 @@ class InstallState(ChangeSet, OperationState):
     pass
 
 
-class InstallOperation(SubprocessMixin, AbstractOperation):
+class InstallOperation(SubprocessMixin, Operation):
     """Install packages using pip.
 
     There are two context values required
@@ -165,7 +165,7 @@ class CheckPackageInstalledState(OperationState):
 
 
 @register("install:check")
-class CheckPackageInstalledOperation(AbstractOperation):
+class CheckPackageInstalledOperation(Operation):
     """
     Check if a package is installed inside the execution shell environment.
     """

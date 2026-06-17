@@ -1,6 +1,6 @@
 from ox_orch.core.registry import register
 from ox_orch.utils import LazyTranslation
-from .base import AbstractOperation
+from .base import Operation
 
 
 class DjangoRuntime:
@@ -41,7 +41,7 @@ __all__ = ("Migrations", "ManageCommand", "CollectStatic")
 
 
 @register("django:migrations")
-class Migrations(AbstractOperation):
+class Migrations(Operation):
     """
     Apply Django migrations incrementally.
     """
@@ -79,7 +79,7 @@ class Migrations(AbstractOperation):
 
 
 @register("django:manage")
-class ManageCommand(AbstractOperation):
+class ManageCommand(Operation):
     """
     Run a generic manage.py command.
     """

@@ -3,7 +3,7 @@ from typing import Generator
 from ox_orch.core.contexts import ExecutionContext
 from ox_orch.core.state import Status
 
-from .base import OPERATION_REGISTRY, STATE_REGISTRY, RunContext, OperationState, AbstractOperation, RunPython
+from .base import OPERATION_REGISTRY, STATE_REGISTRY, RunContext, OperationState, Operation, RunPython
 from .plan import Plan
 from .apps import AppsContext, AppPlanState, AppPlan, ReconciliationPlan, AppsPlan
 from .subprocess import SubprocessOperation
@@ -15,7 +15,7 @@ __all__ = (
     "STATE_REGISTRY",
     "RunContext",
     "OperationState",
-    "AbstractOperation",
+    "Operation",
     "RunPython",
     # Plan
     "Plan",
@@ -32,7 +32,7 @@ __all__ = (
 
 
 def apply(
-    operation: AbstractOperation,
+    operation: Operation,
     state: OperationState,
     ctx: ExecutionContext | None = None,
     # state_backend: Optional[StateBackend] = None,
@@ -53,7 +53,7 @@ def apply(
 
 
 def rollback(
-    operation: AbstractOperation,
+    operation: Operation,
     state: OperationState,
     ctx: ExecutionContext | None = None,
     # state_backend: Optional[StateBackend] = None,
@@ -74,7 +74,7 @@ def rollback(
 
 
 def wait(
-    func, operation: AbstractOperation, state: OperationState, *args, raises=True, **kwargs
+    func, operation: Operation, state: OperationState, *args, raises=True, **kwargs
 ) -> list[OperationState] | tuple[list[OperationState], Exception | None]:
     """
     Execute the provided :py:meth:`apply` or :py:meth:`rollback` function and

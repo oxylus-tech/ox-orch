@@ -3,7 +3,7 @@ from typing import Any, Optional
 
 
 from ox_orch.core.registry import register
-from .base import AbstractOperation, OperationState
+from .base import Operation, OperationState
 
 
 __all__ = ("SubprocessMixin", "SubprocessState", "SubprocessOperation")
@@ -93,7 +93,7 @@ class SubprocessState(OperationState):
 
 
 @register("subprocess")
-class SubprocessOperation(SubprocessMixin, AbstractOperation):
+class SubprocessOperation(SubprocessMixin, Operation):
     """
     Generic subprocess-based operation.
 

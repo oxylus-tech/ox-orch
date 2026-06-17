@@ -2,6 +2,7 @@ from .contexts import ExecutionContext, RunContext
 from .files import FileBackend, YAMLBackend, JSONBackend, JSONLBackend
 from .events import Hook, HookEmitter
 from .registry import Registry, RegisteredClass, register
+from .pydantic import PolymorphicModel
 from .state import Status, State, HistoryState, TreeState, ChangeSet
 from .stores import Store, MemoryStore, FileStore
 from .trace import TraceEvent, ReplayState, ExecutionReplay
@@ -19,6 +20,7 @@ __all__ = (
     "Registry",
     "RegisteredClass",
     "register",
+    "PolymorphicModel",
     "Status",
     "State",
     "HistoryState",

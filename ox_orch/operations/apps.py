@@ -1,13 +1,13 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 from pydantic import Field, field_validator
 
-from ox_orch.apps import AppMetadata, AppStore, AppStateStore
+from ox_orch.apps import Application, AppStore, AppStateStore, AppStateMemoryStore
 from ox_orch.core import register, Status, ChangeSet
-from .base import AbstractOperation
+from .base import Operation
 from .plan import Plan, PlanState
 
 
@@ -21,9 +21,17 @@ logger = logging.getLogger()
 class AppsContext:
     """Context provided to app related operation."""
 
-    apps: list[AppMetadata]
+    apps: list[Application]
     store: AppStore
-    state_store: AppStateStore
+    state_store: AppStateStore = field(default_factory=AppStateMemoryStore)
+
+    @classmethod
+    def from_apps_ids(cls, apps: list[str], store: AppStore, **kwargs):
+        """
+        Create a new instance using provided application references.
+        """
+        apps = store.get_all(apps, exc=True)
+        return cls(apps=apps, store=store, **kwargs)
 
 
 @register("app")
@@ -32,7 +40,7 @@ class AppPlanState(PlanState):
 
     app_id: str
     """ Application id. """
-    app: AppMetadata
+    app: Application
     """ Application metadata used for install. """
     target_version: str
     """ Version expected by registry update. """
@@ -58,7 +66,7 @@ class AppPlan(Plan):
 
     __state_class__ = AppPlanState
 
-    app: Optional[AppMetadata] = None
+    app: Application | None = None
 
     def create_state(self, **kwargs):
         return super().create_state(
@@ -83,7 +91,7 @@ class ReconciliationState(ChangeSet, PlanState):
 
 
 @register("reconciliation")
-class ReconciliationPlan(AbstractOperation):
+class ReconciliationPlan(Operation):
     """
     Run reconciliation for the provided applications.
 
@@ -133,7 +141,7 @@ class ReconciliationPlan(AbstractOperation):
         #    for app in apps:
         #        state.add_update(app, enabled=True)
 
-    def get_dirty_apps(self, apps: Iterable[AppMetadata], state_store: AppStateStore) -> list[AppMetadata]:
+    def get_dirty_apps(self, apps: Iterable[Application], state_store: AppStateStore) -> list[Application]:
         """
         Get applications that have been updated in the environment.
 
@@ -164,16 +172,24 @@ class AppsPlan(Plan):
 
         - Install packages (pip/poetry/uv/etc)
         - Detect implicit updates & run reconciliation
-        - Update registry with the installed versions
+        - Update state store with the installed versions
+
+    Typical workflow induces:
+
+        - :py:attr:`before_install` (optional): operations to run before packages install.
+        - :py:attr:`install`: install python packages
+        - :py:attr:`after_install` (optional): operations to run after packages install.
+        - :py:attr:`reconciliation` (optional): application reconciliation.
+        - :py:attr:`after_reconciliation` (optional): operations to run after reconciliation.
     """
 
     __apply_spec__ = {"apps_ctx": AppsContext}
     __rollback_spec__ = {"apps_ctx": AppsContext}
     __state_class__ = AppsState
 
-    install: AbstractOperation
+    install: Operation
     """ Installation plan (as PipInstall). """
-    reconciliation: ReconciliationPlan
+    reconciliation: ReconciliationPlan | None = None
     """
     Implicit update plan that will be run for each updated application.
 
@@ -189,30 +205,40 @@ class AppsPlan(Plan):
             ]
         )
 
+    The reconciliation will be built up with an :py:class:`AppPlan` containing
+    those operations.
     """
-    before_install: list[AbstractOperation] = Field(default_factory=list)
+    before_install: list[Operation] = Field(default_factory=list)
     """ Operations to run before packages installation. """
-    after_install: list[AbstractOperation] = Field(default_factory=list)
+    after_install: list[Operation] = Field(default_factory=list)
     """ Operations to run before packages installation. """
-    after_reconciliation: list[AbstractOperation] = Field(default_factory=list)
+    after_reconciliation: list[Operation] = Field(default_factory=list)
     """ Operations to run after applications reconciliation. """
 
     @field_validator("reconciliation", mode="before")
     @classmethod
-    def build_reconciliation(cls, value):
+    def build_reconciliation(cls, value: ReconciliationPlan | list[Operation] | tuple[Operation]):
+        """
+        Reconciliation validator allowing to provide a list or tuple of operations.
+        The operations will be added to the ReconciliationPlan's AppPlan.
+        """
         if isinstance(value, ReconciliationPlan):
             return value
 
-        return ReconciliationPlan(operations=value)
+        if isinstance(value, (list, tuple)):
+            return ReconciliationPlan(app_plan=AppPlan(operations=value))
+
+        return value
 
     def get_operations(self, state):
-        return [
+        items = [
             *self.before_install,
             self.install,
             *self.after_install,
-            self.reconciliation,
-            *self.after_reconciliation,
         ]
+        if self.reconciliation is not None:
+            items.append(self.reconciliation)
+        return items + self.after_reconciliation
 
     def _apply(self, state, ctx, apps_ctx: AppsContext, **inputs):
         yield from super()._apply(state, ctx, apps_ctx=apps_ctx, apps=apps_ctx.apps, **inputs)

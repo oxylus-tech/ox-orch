@@ -2,10 +2,10 @@ import pytest
 
 from ox_orch.core.execution import Executor, ExecutionError, ExecutionSpec
 from ox_orch.core.state import Status
-from ox_orch.operations import AbstractOperation
+from ox_orch.operations import Operation
 
 
-class FakeOperation(AbstractOperation):
+class FakeOperation(Operation):
     """
     Minimal operation used to test Executor behavior.
     """

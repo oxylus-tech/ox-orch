@@ -6,11 +6,22 @@ from typing import Iterable, TypeAlias
 
 from pydantic import Field, BaseModel, field_validator, model_validator
 
-from ox_orch.core import stores
+from ox_orch.core import stores, Registry, PolymorphicModel
 from ox_orch.utils import map_or_return
 
 
-__all__ = ("AppId", "AppVersion", "AppRef", "Dependency", "AppMetadata", "resolve_install_order")
+__all__ = (
+    "AppId",
+    "AppVersion",
+    "AppRef",
+    "APP_FEATURE_REGISTRY",
+    "AppFeature",
+    "Versioned",
+    "Dependency",
+    "AppRelease",
+    "Application",
+    "resolve_install_order",
+)
 
 
 AppId: TypeAlias = str
@@ -28,6 +39,17 @@ def as_app_ref(ref) -> AppRef:
     return ref
 
 
+APP_FEATURE_REGISTRY = Registry()
+
+
+class AppFeature(PolymorphicModel):
+    """Base class for all optional features extension."""
+
+    __registry__ = APP_FEATURE_REGISTRY
+
+    pass
+
+
 class Versioned(BaseModel):
     """Base class that provide an app id and a version."""
 
@@ -38,7 +60,7 @@ class Versioned(BaseModel):
 
     @property
     def ref(self) -> AppRef:
-        """Return app's unique key."""
+        """Return version unique key."""
         return (self.id, self.version)
 
     def __hash__(self):
@@ -130,9 +152,25 @@ class AppRelease(Versioned):
             )
         return value
 
+    def get_installed_version(self) -> str | None:
+        """Return installed version read from environment metadata."""
+        try:
+            return metadata.version(self.package)
+        except metadata.PackageNotFoundError:
+            return None
 
-class AppMetadata(AppRelease):
-    """Standardized and generic application metadata."""
+
+class Application(AppRelease):
+    """
+    Standardized and generic application metadata.
+
+    An Application is composed of multiple release information, which
+    can be used to resolve dependencies and other informations for the
+    same installation unit.
+
+    It also contains extra information to be used by extensions, as for
+    Django. Those are put in :py:attr:`features` (by extension name).
+    """
 
     name: str
     """ Human readable name of the application. """
@@ -142,9 +180,11 @@ class AppMetadata(AppRelease):
     """ Assign Application to tags. """
     releases: dict[str, AppRelease] = Field(default_factory=dict)
     """ Application information for other releases. """
+    features: dict[str, AppFeature] = Field(default_factory=dict)
+    """ Optional features extension data. """
 
     @model_validator(mode="after")
-    def validate_releases_consistency(self) -> "AppMetadata":
+    def validate_releases_consistency(self) -> "Application":
         """Ensures all releases belong to this app."""
         for version, release in self.releases.items():
             if release.id != self.id:
@@ -163,30 +203,23 @@ class AppMetadata(AppRelease):
             raise KeyError(f"No release found for {self.id}@{version}")
         return release
 
-    def get_installed_version(self) -> str | None:
-        """Return installed version read from environment metadata."""
-        try:
-            return metadata.version(self.package)
-        except metadata.PackageNotFoundError:
-            return None
-
 
 class AppStore(stores.Store):
     """
     This registry is used to get and resolve application metadata.
     """
 
-    model_class = AppMetadata
+    model_class = Application
     key = "id"
 
-    def __init__(self, *args, apps: Iterable[AppMetadata] | None = None, **kwargs):
+    def __init__(self, *args, apps: Iterable[Application] | None = None, **kwargs):
         super().__init__(*args, **kwargs)
 
         if apps:
             self.commit(apps)
 
     # ---- implementated methods
-    def resolve(self, app_refs: Iterable[AppRef | AppId]) -> list[AppMetadata]:
+    def resolve(self, app_refs: Iterable[AppRef | AppId]) -> list[Application]:
         """
         Get all applications metadata including their dependencies.
 
@@ -240,7 +273,7 @@ class AppMemoryStore(AppStore, stores.MemoryStore):
     This class is a pydantic model, allowing it to be deserialized from
     a source file.
 
-    Applications are kept as a dict of ``app_id: list[AppMetadata]``. The list
+    Applications are kept as a dict of ``app_id: list[Application]``. The list
     is sorted by version.
     """
 

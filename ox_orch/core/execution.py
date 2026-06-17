@@ -5,7 +5,7 @@ from typing import Any, Generator
 
 from pydantic import BaseModel, Field
 
-from ..operations import AbstractOperation, OperationState
+from ..operations import Operation, OperationState
 from ..hooks import ExecutorHook, EXECUTOR_HOOK_REGISTRY
 from .contexts import RunContext, ExecutionContext
 from .events import HookEmitter
@@ -37,7 +37,7 @@ class ExecutionSpec(BaseModel):
     - run metadata
     """
 
-    operation: AbstractOperation
+    operation: Operation
     """ Operation import path or __type_id__ reference. """
     hooks: list[str] = Field(default_factory=list)
     """ Hook class paths to load dynamically. """
@@ -151,14 +151,14 @@ class Executor(HookEmitter):
             self.emit("rollback_failed", operation, state, exc)
             raise ExecutionError(str(exc)) from exc
 
-    def apply_sync(self, spec: ExecutionSpec) -> State:
+    def apply_sync(self, spec: ExecutionSpec, **inputs) -> State:
         """Apply and return the final state."""
-        gen = self.apply(spec)
+        gen = self.apply(spec, **inputs)
         return self._consume_sync(gen)
 
-    def rollback_sync(self, spec: ExecutionSpec, state: OperationState) -> State:
+    def rollback_sync(self, spec: ExecutionSpec, state: OperationState, **inputs) -> State:
         """Rollback and return the final state."""
-        gen = self.rollback(spec, state)
+        gen = self.rollback(spec, state, **inputs)
         return self._consume_sync(gen)
 
     def _consume_sync(self, gen) -> State:

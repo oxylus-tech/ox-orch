@@ -25,7 +25,7 @@ def pyop_state(pyop):
     return pyop.create_state()
 
 
-class TestAbstractOperation:
+class TestOperation:
     def test_create_state(self, op):
         state = op.create_state()
         op.validate_state(state)

@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Annotated, Generator, Iterable
 from pydantic import Field, field_validator
 
-from ox_orch.core.registry import register
-from .base import OperationState, Status, AbstractOperation
+from ox_orch.core import register, TreeState
+from .base import OperationState, Status, Operation
 
 
 __all__ = (
@@ -14,7 +14,7 @@ __all__ = (
 
 
 @register("plan")
-class PlanState(OperationState):
+class PlanState(TreeState, OperationState):
     """State of a Plan operation."""
 
     def get_resume_index(self) -> int:
@@ -23,7 +23,7 @@ class PlanState(OperationState):
 
 
 @register("plan")
-class Plan(AbstractOperation):
+class Plan(Operation):
     """
     Plan is an operation composed of child operations.
 
@@ -31,7 +31,7 @@ class Plan(AbstractOperation):
     generated dynamically by overrding :py:meth:`get_operations`.
     """
 
-    operations: Annotated[list[AbstractOperation], Field(subclass_ok=True)] = Field(default_factory=list)
+    operations: Annotated[list[Operation], Field(subclass_ok=True)] = Field(default_factory=list)
     """ The operations to run. """
     __state_class__ = PlanState
     __full_inputs__ = True
@@ -42,7 +42,7 @@ class Plan(AbstractOperation):
 
     @field_validator("operations", mode="before")
     def validate_operations(cls, v):
-        return [AbstractOperation.model_validate(op) if isinstance(op, dict) and "__type__" in op else op for op in v]
+        return [Operation.model_validate(op) if isinstance(op, dict) and "__type__" in op else op for op in v]
 
     def _apply(self, state, ctx, **inputs) -> Generator[OperationState]:
         """
@@ -111,7 +111,7 @@ class Plan(AbstractOperation):
         inputs["plan"] = self
         return super().get_inputs(state, **inputs)
 
-    def get_operations(self, state: OperationState) -> Iterable[AbstractOperation]:
+    def get_operations(self, state: OperationState) -> Iterable[Operation]:
         """
         Return operations handled by the plan (for apply and rollback).
         This function MUST be deterministic and coherent between

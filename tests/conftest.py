@@ -7,8 +7,8 @@ from pydantic import PrivateAttr, BaseModel
 from ox_orch.core import files
 from ox_orch.core import ExecutionContext
 from ox_orch.core.shell import EchoShell, ShellSpec
-from ox_orch.apps import AppMetadata, AppState, AppMemoryStore, AppStateMemoryStore
-from ox_orch.operations import AbstractOperation, OperationState
+from ox_orch.apps import Application, AppState, AppMemoryStore, AppStateMemoryStore
+from ox_orch.operations import Operation, OperationState
 from ox_orch.operations.install import InstallOperation
 
 
@@ -23,7 +23,7 @@ package_versions = {
 package_next_versions = {key: f"{int(value.split('.')[0])+1}" for key, value in package_versions.items()}
 
 
-class Operation(AbstractOperation):
+class Operation(Operation):
     applied: bool = False
     rollbacked: bool = False
     __type_id__ = "op:test:operation"
@@ -99,7 +99,7 @@ def op_state(op):
 
 @pytest.fixture
 def app():
-    return AppMetadata(
+    return Application(
         id="pydantic",
         package="pydantic",
         version="3",
@@ -108,7 +108,7 @@ def app():
 
 @pytest.fixture
 def app_meta():
-    return AppMetadata(
+    return Application(
         id="pydantic",
         name="Pydantic",
         version=package_next_versions["pydantic"],
@@ -120,7 +120,7 @@ def app_meta():
 
 @pytest.fixture
 def app_meta_1():
-    return AppMetadata(
+    return Application(
         id="pytest",
         name="Pytest",
         version=package_next_versions["pytest"],
@@ -132,7 +132,7 @@ def app_meta_1():
 
 @pytest.fixture
 def app_dep(app_meta, app_meta_1):
-    return AppMetadata(
+    return Application(
         id="pyyaml",
         name="PyYaml",
         version=package_next_versions["pyyaml"],
@@ -143,7 +143,7 @@ def app_dep(app_meta, app_meta_1):
 
 @pytest.fixture
 def app_dep_1(app_meta, app_dep):
-    return AppMetadata(
+    return Application(
         id="black",
         name="Black",
         version=package_versions["black"],

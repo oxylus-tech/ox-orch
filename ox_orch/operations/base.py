@@ -6,18 +6,18 @@ from uuid import uuid4, UUID
 from pydantic import Field
 
 
-from ox_orch.apps import AppMetadata
+from ox_orch.apps import Application
 from ox_orch.core.contexts import RunContext, ExecutionContext
 from ox_orch.core.pydantic import LazyTranslation, PolymorphicModel
 from ox_orch.core.registry import register, Registry
-from ox_orch.core.state import TreeState, HistoryState, Status
+from ox_orch.core.state import HistoryState, Status
 
 
 __all__ = (
     "Status",  # re-export for convenience
     "RunContext",
     "OperationState",
-    "AbstractOperation",
+    "Operation",
     "RunPython",
     "STATE_REGISTRY",
     "OPERATION_REGISTRY",
@@ -32,7 +32,7 @@ OPERATION_REGISTRY = Registry()
 
 
 @register("operation")
-class OperationState(TreeState, HistoryState, PolymorphicModel):
+class OperationState(HistoryState, PolymorphicModel):
     """
     Keep state informations of an operation.
     """
@@ -44,8 +44,8 @@ class OperationState(TreeState, HistoryState, PolymorphicModel):
 
     This is set at two places:
 
-        - :py:meth:`AbstractOperation.create_state`
-        - :py:meth:`AbstractOperation.validate_state`
+        - :py:meth:`Operation.create_state`
+        - :py:meth:`Operation.validate_state`
     """
     operation_id: str = None
     """ Operation id. """
@@ -57,7 +57,7 @@ class OperationState(TreeState, HistoryState, PolymorphicModel):
         return f"{type(self).__name__}@{self.operation_id} (status={self.status})"
 
 
-class AbstractOperation(PolymorphicModel):
+class Operation(PolymorphicModel):
     """
     Abstract base class for all install operations.
 
@@ -79,7 +79,7 @@ class AbstractOperation(PolymorphicModel):
 
         .. code-block:: python
 
-            class MyOp(AbstractOperation):
+            class MyOp(Operation):
                 # This is used as state.operation_id value
                 __type_id__ = "op:my_op"
 
@@ -344,11 +344,11 @@ class AbstractOperation(PolymorphicModel):
 
 
 @register("python")
-class RunPython(AbstractOperation):
+class RunPython(Operation):
     """Run python code."""
 
-    forward: Callable[(AppMetadata, AbstractOperation), None]
-    backward: Callable[(AppMetadata, AbstractOperation), None]
+    forward: Callable[(Application, Operation), None]
+    backward: Callable[(Application, Operation), None]
     label = "🐍 Run python code"
 
     def _apply(self, *args, **context):
