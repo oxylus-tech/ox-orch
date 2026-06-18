@@ -2,7 +2,6 @@ from .app import (
     AppId,
     AppVersion,
     AppRef,
-    APP_FEATURE_REGISTRY,
     AppFeature,
     Dependency,
     AppRelease,
@@ -13,11 +12,13 @@ from .app import (
 )
 from .state import (
     InstallOrigin,
-    APP_STATE_FEATURE_REGISTRY,
-    AppFeatureState,
+    AppStateFeature,
     AppState,
+    AppStateStoreFeature,
+    AppStateStoreModel,
     AppStateStore,
     AppStateMemoryStore,
+    AppStateFileStore,
 )
 
 
@@ -25,7 +26,6 @@ __all__ = (
     "AppId",
     "AppVersion",
     "AppRef",
-    "APP_FEATURE_REGISTRY",
     "AppFeature",
     "Dependency",
     "AppRelease",
@@ -34,10 +34,11 @@ __all__ = (
     "AppMemoryStore",
     "AppFileStore",
     "InstallOrigin",
-    "APP_STATE_FEATURE_REGISTRY",
-    "AppFeatureState",
+    "AppStateFeature",
     "AppState",
+    "AppStateStoreFeature",
+    "AppStateStoreModel",
     "AppStateStore",
     "AppStateMemoryStore",
-    "AppStateMemoryStore",
+    "AppStateFileStore",
 )

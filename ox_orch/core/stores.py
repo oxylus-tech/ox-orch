@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Generic, TypeVar, Iterable, Type
+from typing import Any, Generic, TypeVar, Iterable, Iterator, Type
 
 from pydantic import BaseModel, Field, TypeAdapter
 
@@ -120,6 +120,11 @@ class Store(ABC, Generic[K, V]):
         return items
 
     @abstractmethod
+    def all(self) -> Iterator[V]:
+        """Return an iterator over all stored object."""
+        pass
+
+    @abstractmethod
     def commit(self, items: Iterable[V]) -> None:
         """Update items."""
         pass
@@ -163,6 +168,9 @@ class MemoryStore(Store[K, V]):
     def get(self, key: K, exc=None) -> V | None:
         # FIXME: model_copy?
         return self.data.get(key)
+
+    def all(self) -> Iterator[V]:
+        return iter(self.data.values())
 
     def commit(self, items: Iterable[V] | None) -> None:
         self.data.update((self.get_key(item), item) for item in items)
@@ -229,17 +237,20 @@ class FileStore(MemoryStore[K, V]):
         if self.backend.as_list:
             raise ValueError("File backend can not be configured for lists (as_list).")
 
-    def load(self) -> None:
+    def load(self) -> FileStoreModel:
         if not self.path.exists():
             return
 
         model = self.backend.load(self.path)
         self.data = {key: self.model_class(**dat) for key, dat in model.data.items()}
         self.metadata = model.metadata
+        return model
 
     def save(self) -> None:
-        model = self.backend.model_class(
-            data=self.data,
-            metadata=self.metadata,
-        )
+        data = self.get_save_data()
+        model = self.backend.model_class(**data)
         self.backend.save(self.path, model)
+
+    def get_save_data(self, **kwargs) -> dict[str, Any]:
+        """Return FileStoreModel arguments when saving it."""
+        return {"data": self.data, "metadata": self.metadata, **kwargs}

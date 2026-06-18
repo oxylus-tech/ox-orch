@@ -5,7 +5,7 @@ from typing import Any, Iterable
 
 from pydantic import Field, field_validator
 
-from ox_orch.apps import Application, AppStore, AppStateStore, AppStateMemoryStore
+from ox_orch.apps import Application, AppState, AppStore, AppStateStore, AppStateMemoryStore
 from ox_orch.core import register, Status, ChangeSet
 from .base import Operation
 from .plan import Plan, PlanState
@@ -15,6 +15,16 @@ __all__ = ("AppsContext", "AppPlanState", "AppPlan", "ReconciliationPlan", "Apps
 
 
 logger = logging.getLogger()
+
+
+@dataclass
+class AppContext:
+    """Context provided to AppPlan's operations."""
+
+    app: Application
+    app_state: AppState
+    app_plan: AppPlan
+    app_plan_state: AppPlanState
 
 
 @dataclass
@@ -58,10 +68,7 @@ class AppPlan(Plan):
     """
     Reconcile a Django application after package installation.
 
-    Nested operations will be run with two extra context:
-
-        - ``app``: AppPlan instance;
-        - ``app_state``: the state of the AppPlan
+    Nested operations will be run with ``app_ctx`` (instance of :py:class:`AppContext`).
     """
 
     __state_class__ = AppPlanState
@@ -77,10 +84,14 @@ class AppPlan(Plan):
             **kwargs,
         )
 
-    def get_inputs(self, state, **inputs):
-        inputs["app"] = self.app
-        inputs["app_state"] = state
-        return super().get_inputs(state, **inputs)
+    def get_inputs(self, state, apps_ctx, **inputs):
+        inputs["app_ctx"] = AppContext(
+            app=self.app,
+            app_state=apps_ctx.state_store.get_or_create(self.app),
+            app_plan=self,
+            app_plan_state=state,
+        )
+        return super().get_inputs(state, apps_ctx=apps_ctx, **inputs)
 
 
 @register("reconciliation")

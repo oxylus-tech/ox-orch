@@ -140,6 +140,8 @@ class AppRelease(Versioned):
 
     Note that on uninstallation, :py:attr:`package` is used.
     """
+    features: dict[str, AppFeature] = Field(default_factory=dict)
+    """ Optional features extension data. """
 
     @field_validator("dependencies", mode="before")
     @classmethod
@@ -170,6 +172,39 @@ class Application(AppRelease):
 
     It also contains extra information to be used by extensions, as for
     Django. Those are put in :py:attr:`features` (by extension name).
+
+
+    Features
+    --------
+
+    Extensions can register additional data on application using the field
+    :py:attr:`features`. This is a dictionary of pydantic models by feature
+    name.
+
+    The model shall be subclassing the polymorphic model :py:class:`AppFeature`
+    that must be registered using the ``register`` decorator.
+
+    .. code-block:: python
+
+        from ox_orch.core import register
+        from ox_orch.apps import AppFeature
+
+        @register("django")
+        class DjangoFeature(AppFeature):
+            app_label: str
+            migration_enabled = True
+
+
+        # Then on the application:
+        app = Application(name="app", package="app_pkg", version="0.0.1", features={
+            "django": DjangoFeature(app_label="app.label")
+        })
+
+    The mechanism is similar on other classes as for:
+
+        -:py:class:`~state.AppStateFeature` and :py:class:`~state.AppState`
+        -:py:class:`~state.AppStateStoreFeature` and :py:class:`~state.AppStateStore`
+
     """
 
     name: str
@@ -180,13 +215,12 @@ class Application(AppRelease):
     """ Assign Application to tags. """
     releases: dict[str, AppRelease] = Field(default_factory=dict)
     """ Application information for other releases. """
-    features: dict[str, AppFeature] = Field(default_factory=dict)
-    """ Optional features extension data. """
 
     @model_validator(mode="after")
     def validate_releases_consistency(self) -> "Application":
         """Ensures all releases belong to this app."""
         for version, release in self.releases.items():
+            release._app = self
             if release.id != self.id:
                 raise ValueError(f"Release `{version}` has id=`{release.id}` " f"but expected `{self.id}`")
             if release.version != version:
@@ -202,6 +236,17 @@ class Application(AppRelease):
         if release is None and exc:
             raise KeyError(f"No release found for {self.id}@{version}")
         return release
+
+    def create_state(self, **kwargs):
+        """
+        Return new state for this application.
+
+        :param kwargs: extra init arguments.
+        :returns: AppState
+        """
+        from .state import AppState
+
+        return AppState(id=self.id, version=self.version, package=self.package, **kwargs)
 
 
 class AppStore(stores.Store):
@@ -219,7 +264,7 @@ class AppStore(stores.Store):
             self.commit(apps)
 
     # ---- implementated methods
-    def resolve(self, app_refs: Iterable[AppRef | AppId]) -> list[Application]:
+    def resolve(self, app_refs: Iterable[AppRef | AppId]) -> list[AppRelease]:
         """
         Get all applications metadata including their dependencies.
 
