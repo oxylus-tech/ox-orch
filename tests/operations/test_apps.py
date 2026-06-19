@@ -3,6 +3,7 @@ import pytest
 from ox_orch.utils import consume_iter
 from ox_orch.core.shell import EchoShell
 from ox_orch.core.state import Status
+from ox_orch.apps import AppState
 
 from ..conftest import package_versions, package_next_versions
 
@@ -19,11 +20,13 @@ class TestAppPlan:
         assert state.app_id == app_meta.id
         assert state.target_version == app_meta.version
 
-    def test_get_inputs(self, app_plan, app_meta):
+    def test_get_inputs(self, app_plan, app_meta, apps_ctx):
         state = app_plan.create_state()
-        context = app_plan.get_inputs(state)
-        assert context["app"] == app_meta
-        assert context["app_state"] == state
+        context = app_plan.get_inputs(state, apps_ctx)
+        assert context["app_ctx"].app == app_plan.app
+        assert isinstance(context["app_ctx"].app_state, AppState)
+        assert context["app_ctx"].app_plan == app_plan
+        assert context["app_ctx"].app_plan_state == state
 
 
 class TestReconciliationPlan:

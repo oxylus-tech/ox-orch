@@ -39,13 +39,6 @@ class TestSubprocessMixin:
         def run(self, args):
             self.run_calls.append(args)
 
-    def test_run_executes_subprocess(self, mock_run):
-        op = DummyOp()
-        op.run(["echo", "hello"])
-
-        mock_run.assert_called_once()
-        assert mock_run.call_args[0][0] == ["echo", "hello"]
-
     def test_apply_sets_forward_command(self, exec_ctx, mock_run):
         op = DummyOp()
         state = SubprocessState()

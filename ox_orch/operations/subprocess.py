@@ -1,8 +1,8 @@
-import subprocess
-from typing import Any, Optional
+from typing import ClassVar
 
 
 from ox_orch.core.registry import register
+from ox_orch.core.shell import Shell
 from .base import Operation, OperationState
 
 
@@ -19,21 +19,10 @@ class SubprocessMixin:
     - capturing stdout/stderr if configured
     """
 
-    _stdout: Optional[Any] = None
-    _stderr: Optional[Any] = None
-
-    def run(self, args: list[str]):
-        """
-        Execute a subprocess command.
-
-        :param args: full command as list of strings
-        """
-        subprocess.run(
-            args,
-            check=True,
-            stdout=self._stdout,
-            stderr=self._stderr,
-        )
+    _shell: ClassVar[Shell | None] = None
+    """ Overrides shell provided by execution context. """
+    # _stdout: Optional[Any] = None
+    # _stderr: Optional[Any] = None
 
     def get_forward(self, state, **context) -> list[str]:
         """
@@ -58,7 +47,8 @@ class SubprocessMixin:
             self.log("Run: {' '.join(cmd)}")
 
             if not ctx.run.dry_run:
-                ctx.shell.run(cmd)
+                shell = self._shell or ctx.shell
+                shell.run(cmd)
         else:
             self.log("No command to apply")
 
@@ -72,7 +62,8 @@ class SubprocessMixin:
         if cmd:
             self.log("Run: {' '.join(cmd)}")
             if not ctx.run.dry_run:
-                ctx.shell.run(cmd)
+                shell = self._shell or ctx.shell
+                shell.run(cmd)
         else:
             self.log("No command to apply")
 
@@ -102,7 +93,7 @@ class SubprocessOperation(SubprocessMixin, Operation):
     - get_backward()
     """
 
-    _state_class = SubprocessState
+    __state_class__ = SubprocessState
 
     forward: list[str] = []
     backward: list[str] = []

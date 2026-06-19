@@ -4,7 +4,7 @@ from enum import Enum
 from pydantic import Field
 
 
-from ox_orch.core import stores, JSONBackend, Registry, PolymorphicModel
+from ox_orch.core import stores, JSONBackend, Registry, PolymorphicModel, State
 from .app import Versioned, Application
 
 
@@ -40,7 +40,7 @@ class AppStateFeature(PolymorphicModel):
     __registry__ = APP_STATE_FEATURE_REGISTRY
 
 
-class AppState(Versioned):
+class AppState(Versioned, State):
     """Application installation state."""
 
     package: str
@@ -108,7 +108,7 @@ class AppStateStore(stores.Store):
         state = self.get(app.id)
         if not state:
             state = app.create_state(**kwargs)
-            self.commit({state.id: state})
+            self.commit([state])
         return state
 
 
