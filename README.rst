@@ -6,6 +6,22 @@ A state-driven orchestration engine for deterministic application lifecycle mana
 ``ox-orch`` provides a structured way to define, execute, and rollback complex workflows such as package installation, migrations, and application reconciliation. It replaces imperative deployment scripts with a composable, state-based execution model.
 
 
+Example of a plan to install or update Django applications:
+
+
+```python
+
+    from ox_orch.operations import AppsPlan, UvInstall
+    from ox_orch.django.operations import DjangoReconciliation
+
+    AppsPlan(
+        install=UvInstall(),
+        after_install=DjangoReconciliation()
+    )
+
+```
+
+
 Features
 ---------
 
@@ -23,7 +39,7 @@ The library in the main lines allows:
 
 Currently supported operations:
 
-- Core operations: base operation, run python function, plan execution;
+- Core operations: base operation, run python function, plan execution, shell invokation;
 - App installation and reconciliation operations;
 - Django specific operations (migrations, collect statics, manage command);
 - Python packages installation: pip, uv, poetry;

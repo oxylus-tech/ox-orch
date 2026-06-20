@@ -121,7 +121,7 @@ class DjangoReconciliation(Plan):
 
     setup: DjangoSetup = Field(default_factory=DjangoSetup)
     migrate: Migrate = Field(default_factory=Migrate)
-    collectstatic: CollectStatic | None = None
+    collectstatic: CollectStatic | None = Field(default_factory=CollectStatic)
 
     def get_operations(self, state):
         operations = [self.setup, self.migrate]
