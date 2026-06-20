@@ -12,7 +12,7 @@ Example of a plan to install or update Django applications:
 .. code-block:: python
 
     from ox_orch.operations import AppsPlan, UvInstall
-    from ox_orch.django.operations import DjangoReconciliation
+    from ox_orch.django import DjangoReconciliation
 
     AppsPlan(
         install=UvInstall(),
@@ -31,7 +31,7 @@ The library in the main lines allows:
 - Plan-based orchestration of multiple operations
 - Deterministic execution graph with dependency resolution
 - Explicit state tracking per operation, with forward/backward diff model for safe rollback (+ rollback on failure).
-- Registry abstraction for application metadata and persistence
+- Application store
 - Framework-agnostic design (Django support optional)
 - Load and save states and operations workflow into YAML;
 

@@ -7,6 +7,86 @@ It provides a structured way to define, execute, and rollback complex workflows 
 and application reconciliation. It replaces imperative deployment scripts with a composable, state-based execution model.
 
 
+Quickstart
+----------
+
+Define a workflow:
+
+.. code-block:: python
+
+    from ox_orch.operations import AppsPlan, UvInstall
+    from ox_orch.django import DjangoReconciliation
+
+    install_apps = AppsPlan(
+        install=UvInstall(),
+        after_install=DjangoReconciliation(),
+    )
+
+
+Both operations and states are serializable as pydantic models, allowing to provide them through API or using configuration files.
+
+Once the workflow is defined, you will execute it like this:
+
+.. code-block:: python
+
+    from ox_orch.core.execution import Executor, ExecutionSpec
+    from ox_orch.apps import Application, AppsContext, AppMemoryStore, AppStateMemoryStore
+    from ox_orch.hooks import LoggingHook
+
+    # ...
+
+    # We have to provide apps_ctx to AppsPlan, which gather:
+    # - An app store: store applications, here in memory
+    # - An app state store: store application states, in memory too;
+    # - A list of apps metadata to use
+    applications = [
+        # By default, package is set to the id
+        Application(id="test-1", version="0.0.1"),
+        Application(id="test-2", version="1.4.2", package="test-2-pkg"),
+        Application(id="test-3", version="1.4.3", package="test-3-pkg")
+    ]
+
+    apps_ctx = AppsContext.from_apps_ids(
+        ["test-1", "test-2"],
+        store=AppMemoryStore(items=applications),
+        state_store=AppStateMemoryStore(),
+    )
+
+    spec = ExecutionSpec(
+        # The operation to execute
+        operation=install_apps,
+        # Add a hook that logs all states changes
+        hooks = [LoggingHook()],
+        # Some user input values if needed.
+        # inputs={},
+    )
+    executor = Executor()
+
+    # Dummy invocation example, when you need to get state, eg. feedback to
+    # to client's API.
+    for state in executor.apply(spec, apps_ctx=apps_ctx):
+        print(f"[{state.operation_id}] {state.status}")
+
+    # Another way to invoke without looping over it:
+    state = executor.apply_sync(spec, apps_ctx=apps_ctx)
+
+
+Rollback becomes trivial:
+
+.. code-block::
+
+    rb_state = executor.rollback_sync(spec, state, apps_ctx=apps_ctx)
+
+    # That's it.
+
+
+.. note::
+
+    We could have passed down ``apps_ctx`` to ExecutionSpec's ``input``. However, it would be wrong.
+
+    The goal of this class is to provide user's input data to run the execution, which implies that they shall be serializable and only data oriented. User can not inject custom code or behavior.
+
+
 Concepts
 --------
 
@@ -119,85 +199,3 @@ filesystems, databases or remote services.
 
 By abstracting persistence behind dedicated interfaces, operations remain
 independent from the underlying storage technology.
-
-
-What do you need to run it?
----------------------------
-
-Define a workflow:
-
-.. code-block:: python
-
-    from ox_orch.operations import AppsPlan, UvInstall, ReconciliationPlan
-    from ox_orch import django
-
-    install_apps = AppsPlan(
-        install=UvInstall(),
-        reconciliation=[
-            django.Migrations(),
-        ]
-        after_install=django.CollectStatic(),
-    )
-
-
-Both operations and states are serializable as pydantic models, allowing to provide them through API or using configuration files.
-
-Once the workflow is defined, you will execute it like this:
-
-.. code-block:: python
-
-    from ox_orch.core.execution import Executor, ExecutionSpec
-    from ox_orch.apps import AppMetadata, AppsContext, AppMemoryStore, AppStateMemoryStore
-    from ox_orch.hooks import LoggingHook
-
-    # ...
-
-    # We have to provide apps_ctx to AppsPlan, which gather:
-    # - An app store: store applications, here in memory
-    # - An app state store: store application states, in memory too;
-    # - A list of apps metadata to use
-    applications = [
-        AppMetadata(id="test-1", version="0.0.1"),
-        AppMetadata(id="test-2", version="1.4.2")
-        AppMetadata(id="test-3", version="1.4.3")
-    ]
-
-    apps_ctx = AppsContext.from_apps_ids(
-        ["test-1", "test-2"],
-        store=AppMemoryStore(items=applications),
-        state_store=AppStateMemoryStore(),
-    )
-
-    spec = ExecutionSpec(
-        # The operation to execute
-        operation=install_apps,
-        # Add a hook that logs all states changes
-        hooks = [LoggingHook()],
-        # Some user input values if needed.
-        # inputs={},
-    )
-    executor = Executor()
-
-    # Dummy invocation example, when you need to get state, eg. feedback to
-    # to client's API.
-    for state in executor.apply(spec, apps_ctx=apps_ctx):
-        print(f"[{state.operation_id}] {state.status}")
-
-    # Another way to invoke without looping over it:
-    state = executor.apply_sync(spec, apps_ctx=apps_ctx)
-
-
-Rollback becomes trivial:
-
-.. code-block::
-
-    rb_state = executor.rollback_sync(spec, state, apps_ctx=apps_ctx)
-
-    # That's it.
-
-
-.. note::
-
-    We could have passed down ``apps_ctx`` to ExecutionSpec's ``input``. However, it would be wrong.
-
-    The goal of this class is to provide user's input data to run the execution, which implies that they shall be serializable and only data oriented. User can not inject custom code or behavior.

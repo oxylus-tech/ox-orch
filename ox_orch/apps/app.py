@@ -115,7 +115,7 @@ class AppRelease(Versioned):
     """
 
     package: str
-    """ Pypi package providing the app. """
+    """ Pypi package providing the app. Defaults to id. """
     dependencies: list[Dependency] = Field(default_factory=list)
     """ Orchestration workflow dependencies.
 
@@ -142,6 +142,12 @@ class AppRelease(Versioned):
     """
     features: dict[str, AppFeature] = Field(default_factory=dict)
     """ Optional features extension data. """
+
+    @model_validator(mode="before")
+    def _set_default_package(cls, dat):
+        if isinstance(dat, dict) and "package" not in dat:
+            dat["package"] = dat["package"]
+        return dat
 
     @field_validator("dependencies", mode="before")
     @classmethod

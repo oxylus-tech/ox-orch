@@ -17,6 +17,11 @@ class Registry:
         self._registry[key] = cls
 
     def get(self, key: str) -> Type:
+        """
+        Get object by key.
+
+        :raises ValueError: when object is not registered.
+        """
         try:
             return self._registry[key]
         except KeyError:
@@ -33,6 +38,9 @@ class Registry:
 
     def __getitem__(self, key: str) -> Type:
         return self.get(key)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._registry
 
 
 class RegisteredClass:
