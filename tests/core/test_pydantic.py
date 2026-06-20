@@ -5,27 +5,33 @@ from ox_orch.core.registry import register, Registry
 
 
 TEST_REGISTRY = Registry()
+TEST_REGISTRY_2 = Registry()
 
 
-@register()
+@register("model")
 class Model(PolymorphicModel):
-    __type_id__ = "model"
     __registry__ = TEST_REGISTRY
 
     name: str
 
 
-@register()
+@register("model-2")
 class Model2(PolymorphicModel):
-    __type_id__ = "model-2"
     __registry__ = TEST_REGISTRY
 
 
-@register()
+@register("sub-model")
 class SubModel(Model):
     __type_id__ = "sub-model"
 
     value: str
+
+
+@register("parent-model")
+class ParentModel(PolymorphicModel):
+    __registry__ = TEST_REGISTRY_2
+
+    child: Model
 
 
 class Unregistered(SubModel):
@@ -65,3 +71,18 @@ class TestPolymorphicModel:
 
     def test_model_validate_no_key(self, submodel):
         assert SubModel.model_validate({"name": "sub model", "value": submodel.value}) == submodel
+
+    def test_nested_polymorphic_models(self, submodel):
+        parent = ParentModel(child=submodel)
+
+        data = parent.model_dump()
+        assert data == {
+            "__type_id__": "parent-model",
+            "config": {
+                "child": {"__type_id__": "sub-model", "config": {"name": "sub model", "value": "sub model value"}}
+            },
+        }
+
+        parent_2 = ParentModel.model_validate(data)
+        assert parent_2 == parent
+        assert parent_2.child == parent.child

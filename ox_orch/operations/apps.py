@@ -62,6 +62,17 @@ class AppPlanState(PlanState):
     once whole installation is done.
     """
 
+    def add_facts(self, facts: dict[str, Any]):
+        """
+        Add application state change, correctly handling features update.
+        """
+        if features := facts.get("features", None):
+            target = self.facts.setdefault("features", {})
+            for key, feature in features.items():
+                target.setdefault(key, {}).update(feature)
+
+        self.facts.udpate((k, v) for k, v in facts.items() if k != "features")
+
 
 @register("app")
 class AppPlan(Plan):
@@ -204,16 +215,18 @@ class AppsPlan(Plan):
     """
     Implicit update plan that will be run for each updated application.
 
-    You can provide it as a list of operations, as:
+    You can provide it as a list of operations or an :py:class:`AppPlan`, as:
 
     .. code-block:: python
 
         AppsPlan(
             install=UvInstall(),
-            reconciliation=[
-                Migrations(),
-                Enable(),
-            ]
+            reconciliation=[Migrations(), Enable()]
+        )
+
+        AppsPlan(
+            install=UvInstall(),
+            reconciliation=AppPlan()
         )
 
     The reconciliation will be built up with an :py:class:`AppPlan` containing
@@ -235,6 +248,9 @@ class AppsPlan(Plan):
         """
         if isinstance(value, ReconciliationPlan):
             return value
+
+        if isinstance(value, AppPlan):
+            return ReconciliationPlan(app_plan=value)
 
         if isinstance(value, (list, tuple)):
             return ReconciliationPlan(app_plan=AppPlan(operations=value))

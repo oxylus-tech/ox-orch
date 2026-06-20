@@ -7,7 +7,7 @@ from pydantic import PrivateAttr, BaseModel
 from ox_orch.core import files
 from ox_orch.core import ExecutionContext
 from ox_orch.core.shell import EchoShell, ShellSpec
-from ox_orch.apps import Application, AppState, AppMemoryStore, AppStateMemoryStore
+from ox_orch.apps import Application, AppMemoryStore, AppStateMemoryStore
 from ox_orch.operations import Operation, OperationState
 from ox_orch.operations.install import InstallOperation
 
@@ -165,7 +165,7 @@ def app_store(app_metas):
 
 @pytest.fixture
 def app_state_store(app_dep_1):
-    return AppStateMemoryStore(items=[AppState(id=app_dep_1.id, version=app_dep_1.version, package=app_dep_1.package)])
+    return AppStateMemoryStore(items=[app_dep_1.create_state()])
 
 
 @pytest.fixture

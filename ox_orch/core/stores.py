@@ -146,6 +146,23 @@ class Store(ABC, Generic[K, V]):
         """Delete item from the store."""
         pass
 
+    def item_update(self, item: V, values: dict[str, Any] | Iterable[tuple[str, Any]]):
+        """
+        Update an item owned by the store inplace using the provided values.
+
+        This method does NOT commit the updated object, it only provide a method
+        to implement sub-classes specific behaviors on partial commits.
+
+        The default implementation simply update the item attributes based on the
+        provided fields. It thus can be reused for other objects than the model
+        instance specified on the store.
+        """
+        if isinstance(values, dict):
+            values = values.items()
+
+        for field, value in values:
+            setattr(item, field, value)
+
     def get_key(self, item) -> K:
         return getattr(item, self.key)
 
@@ -176,26 +193,28 @@ class MemoryStore(Store[K, V]):
         self.data.update((self.get_key(item), item) for item in items)
 
     def partial_commit(self, updates, allow_create: bool = False):
-        for key, data in updates.items():
-            if data is None:
+        for key, values in updates.items():
+            if values is None:
                 self.delete(key)
                 continue
 
-            if self.key in data and data[self.key] != key:
-                raise ValueError(f"Inconsistent key vs payload one: {key} != {data[self.key]}")
+            if self.key in values and values[self.key] != key:
+                raise ValueError(f"Inconsistent key vs payload one: {key} != {values[self.key]}")
 
             obj = self.data.get(key)
             if not obj:
                 if not allow_create:
                     raise KeyError(f"Object not found for key: {key}")
-                data = {**data, self.key: key}
-                self.data[key] = self.model_class(**data)
+                values = {**values, self.key: key}
+                self.data[key] = self.model_class(**values)
             else:
-                for field, value in data.items():
-                    setattr(obj, field, value)
+                self.item_update(obj, values)
 
     def delete(self, key: K) -> None:
         self.data.pop(key, None)
+
+    def __contains__(self, key):
+        return key in self.data
 
 
 class FileStoreModel(BaseModel, Generic[K, V]):

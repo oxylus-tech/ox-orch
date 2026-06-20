@@ -8,6 +8,9 @@ from ox_orch.apps import AppState
 from ..conftest import package_versions, package_next_versions
 
 
+# TODO: features update and commit check
+
+
 @pytest.fixture
 def apps_plan_state(apps_plan):
     return apps_plan.create_state()
@@ -61,9 +64,3 @@ class TestAppsPlan:
         states = apps_ctx.state_store.get_all(app_ids)
         for state in states:
             assert state.version == package_next_versions[state.package]
-
-    def test__rollback_call_sync_registry(self, apps_plan):
-        pass
-
-    def test_sync_registry(self, apps_plan):
-        pass

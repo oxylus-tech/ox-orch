@@ -1,5 +1,6 @@
 from __future__ import annotations
 from enum import Enum
+from typing import Any
 
 from pydantic import Field
 
@@ -58,14 +59,14 @@ class AppState(Versioned, State):
     def migrated(self):
         return bool(self.last_migration)
 
-    def validate_transition(self, new_status):
-        super().validate_transition(new_status)
+    # def validate_transition(self, new_status):
+    #    super().validate_transition(new_status)
 
-        # FIXME
-        # if new_status == Status.ROLLING_BACK and self.dependents:
-        #    raise ValueError(
-        #        "This package is required by those applications: {apps}.".format(apps=", ".join(self.dependents))
-        #    )
+    # FIXME
+    # if new_status == Status.ROLLING_BACK and self.dependents:
+    #    raise ValueError(
+    #        "This package is required by those applications: {apps}.".format(apps=", ".join(self.dependents))
+    #    )
 
 
 class AppStateStoreFeature(PolymorphicModel):
@@ -110,6 +111,22 @@ class AppStateStore(stores.Store):
             state = app.create_state(**kwargs)
             self.commit([state])
         return state
+
+    def item_update(self, item: AppState, values: dict[str, Any]):
+        """
+        Item update handling features partial update.
+        """
+        features = item.features
+
+        for field, value in values.items():
+            if field != "features":
+                setattr(item, field, value)
+            else:
+                for name, feature_vals in value.items():
+                    if name not in features:
+                        item.features[name] = AppStateFeature.from_type(name, **feature_vals)
+                    else:
+                        super().item_update(item.features[name], feature_vals)
 
 
 class AppStateMemoryStore(AppStateStore, stores.MemoryStore):

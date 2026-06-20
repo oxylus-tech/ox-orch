@@ -97,6 +97,10 @@ class TestMemoryStore:
 
         assert memory_store.get("a") is None
 
+    def test_item_update(self, memory_store, item_a):
+        memory_store.item_update(item_a, {"value": 234})
+        assert item_a.value == 234
+
 
 class TestFileStoreModel:
     def test_defaults(self):

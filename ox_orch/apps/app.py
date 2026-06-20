@@ -96,7 +96,7 @@ class Dependency(Versioned):
     def to_string(self) -> str:
         """Return dependency as a string."""
         if self.version:
-            return self.id + self.version
+            return self.id + "==" + self.version
         return self.id
 
     def __eq__(self, item):
@@ -215,6 +215,12 @@ class Application(AppRelease):
     """ Assign Application to tags. """
     releases: dict[str, AppRelease] = Field(default_factory=dict)
     """ Application information for other releases. """
+
+    @model_validator(mode="before")
+    def _set_default_name(cls, dat):
+        if isinstance(dat, dict) and "name" not in dat:
+            dat["name"] = dat["id"].capitalize().replace("-", " ").replace("_", " ")
+        return dat
 
     @model_validator(mode="after")
     def validate_releases_consistency(self) -> "Application":

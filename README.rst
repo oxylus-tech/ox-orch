@@ -1,5 +1,5 @@
-ox-orchestrator
-===============
+ox-orch
+=======
 
 A state-driven orchestration engine for deterministic application lifecycle management.
 
@@ -29,16 +29,15 @@ Currently supported operations:
 - Python packages installation: pip, uv, poetry;
 
 
-Why ox-orchestrator
---------------------
+Why ox-orch
+-----------
 
 The initial reason of this project was to allow application installation into Django by the end-user.
 Despite this initial goal, we want it to be reusable for other use cases.
 
-Modern deployment and lifecycle management is often fragmented across scripts, tooling, and manual steps. This leads to
- inconsistent environments, fragile rollback strategies and hidden side effects among other things...
+Modern deployment and lifecycle management is often fragmented across scripts, tooling, and manual steps. This leads to inconsistent environments, fragile rollback strategies and hidden side effects among other things...
 
-``ox-orchestrator`` solves this by introducing a unified execution model where:
+``ox-orch`` solves this by introducing a unified execution model where:
 
 - every change is explicit
 - every operation is reversible
@@ -61,7 +60,7 @@ Advantages
 What's next?
 ------------
 
-The long-term goal of ``ox-orchestrator`` is to make application lifecycle management feel safe, predictable, and
+The long-term goal of ``ox-orch`` is to make application lifecycle management feel safe, predictable, and
 almost invisible in day-to-day operations. Installing, updating, and evolving applications should not require fragile
 scripts or manual intervention, but instead rely on a structured system that understands state, dependencies, and
 recovery.

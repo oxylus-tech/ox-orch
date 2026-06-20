@@ -1,6 +1,7 @@
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, get_origin, get_args
 
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, model_serializer, model_validator
 
 from .registry import RegisteredClass
 
@@ -51,7 +52,27 @@ class PolymorphicModel(RegisteredClass, BaseModel):
 
         obj = SomeParent.model_validate(data)
         assert isinstance(obj.state, SubState)
+
+
+    .. note::
+
+        There are currently some limitation to polymorphic models. Currently
+        you can specify nested polymorphic fields in those forms:
+
+            - either as polymorphic single object
+            - a list of polymorphic objects
+            - a dict whose values are polymorphic object.
+
+
     """
+
+    @classmethod
+    def from_type(cls, type_id, **values):
+        return cls.get_subclass(type_id).model_validate(values)
+
+    @classmethod
+    def get_subclass(cls, type_id):
+        return cls.__registry__.get(type_id)
 
     @model_serializer(mode="wrap")
     def serialize(self, serializer, info) -> dict[str, Any]:
@@ -70,14 +91,57 @@ class PolymorphicModel(RegisteredClass, BaseModel):
             return {"__type_id__": key, "config": recurse(vars(self))}
         return data
 
+    @model_validator(mode="before")
+    def _dispatch_polymorphic(cls, data: Any):
+        """Intercept raw input and dispatch to the correct subclass."""
+        if not isinstance(data, dict):
+            return data
+
+        type_id = data.get("__type_id__")
+        if not type_id:
+            return data
+
     @classmethod
     def model_validate(cls, obj, **kwargs):
-        if not isinstance(obj, dict):
-            raise TypeError("Data must be a dict.")
-        if key := obj.get("__type_id__"):
-            cl = cls.__registry__.get(key)
-            return cl(**obj.get("config"))
-        return cls(**obj)
+        if isinstance(obj, dict):
+            if type_id := obj.get("__type_id__"):
+                raw = obj.get("config")
+                if isinstance(raw, BaseModel):
+                    raw = raw.model_dump()
+                raw = cls.hydrate(raw)
+                return cls.from_type(type_id, **raw)
+        return super().model_validate(obj, **kwargs)
+
+    @classmethod
+    def hydrate(cls, data: dict | BaseModel):
+        """
+        Ensure nested polymorphic model fields are correctly initialized.
+        """
+        if isinstance(data, BaseModel):
+            return data.model_dump()
+
+        if not isinstance(data, Mapping):
+            return data
+
+        data = dict(data)
+        for name, value in data.items():
+            field = cls.model_fields.get(name)
+            if not field:
+                continue
+
+            annotation = field.annotation
+            origin = get_origin(annotation)
+            args = get_args(annotation)
+
+            if isinstance(value, dict) and isinstance(annotation, type):
+                if issubclass(annotation, PolymorphicModel):
+                    data[name] = annotation.model_validate(value)
+
+            if origin in (list, list | None) and args:
+                inner = args[0]
+                if isinstance(inner, type) and issubclass(inner, PolymorphicModel):
+                    data[name] = [inner.model_validate(v) for v in value]
+        return data
 
     @staticmethod
     def _get_model_type(cl):
