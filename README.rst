@@ -9,7 +9,7 @@ A state-driven orchestration engine for deterministic application lifecycle mana
 Example of a plan to install or update Django applications:
 
 
-``` python
+.. code-block:: python
 
     from ox_orch.operations import AppsPlan, UvInstall
     from ox_orch.django.operations import DjangoReconciliation
@@ -18,8 +18,6 @@ Example of a plan to install or update Django applications:
         install=UvInstall(),
         after_install=DjangoReconciliation()
     )
-
-```
 
 
 Features
