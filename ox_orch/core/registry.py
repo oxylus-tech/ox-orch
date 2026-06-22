@@ -12,8 +12,8 @@ class Registry:
         self._registry: dict[str, Type] = {}
 
     def register(self, key: str, cls: Type):
-        if key in self._registry:
-            raise ValueError(f"Duplicate type_id: {key}")
+        if obj := self._registry.get(key):
+            raise ValueError(f"Duplicate type_id: {key}, declared {obj.__module__}")
         self._registry[key] = cls
 
     def get(self, key: str) -> Type:

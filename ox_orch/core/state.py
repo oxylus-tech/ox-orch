@@ -1,4 +1,5 @@
 from __future__ import annotations
+from copy import deepcopy
 from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any, ClassVar, Optional, Iterable
@@ -312,8 +313,7 @@ class ChangeSet(BaseModel):
         if obj is None:
             backward = None
         else:
-            backward = {key: getattr(obj, key, None) for key in forward.keys()}
-
+            backward = {key: deepcopy(getattr(obj, key, None)) for key in forward.keys()}
         self.backward[ref] = backward
 
     def validate_changes(self):

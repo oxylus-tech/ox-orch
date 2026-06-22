@@ -4,7 +4,7 @@ from django.core.management import call_command
 from pydantic import Field
 
 from ox_orch.core import register
-from ox_orch.operations import Operation, OperationState, Plan, Subprocess
+from ox_orch.operations import Operation, OperationState, Plan, ShellOperation
 
 from .project import DjangoProject
 from .shell import ManageCommandShell
@@ -12,6 +12,7 @@ from .shell import ManageCommandShell
 
 __all__ = (
     "DjangoContext",
+    "DjangoEnable",
     "DjangoSetup",
     "ManageCommand",
     "CollectStatic",
@@ -32,8 +33,6 @@ class DjangoContext:
     """ Path to the settings. """
     project_path: Path | None = None
     """ Path to the project. If not provided, assumes it is in current directory. """
-    debug: bool = False
-    """ Enable DEBUG. """
 
     @classmethod
     def from_apps_ctx(cls, apps_ctx, **kwargs):
@@ -43,6 +42,28 @@ class DjangoContext:
         """
         kwargs["project"] = DjangoProject(store=apps_ctx.store, state_store=apps_ctx.state_store)
         return cls(**kwargs)
+
+
+@register("django:enable")
+class DjangoEnable(Operation):
+    """
+    Enable all Django applications of an Application.
+
+    Currently we don't provide support for enabling only a subset of applications,
+    as this would mean dependency management at this level. Dependencies are
+    already handled at the Application level, so if you want fine-grained
+    enabling, you shall divide the target app in multiple python packages.
+
+    This application MUST be run inside an :py:class:`~ox_orch.operations.apps.AppPlan`.
+    """
+
+    __apply_spec__ = ("app_ctx",)
+
+    def _apply(self, state, *_, app_ctx, **__):
+        if feature := app_ctx.app.features.get("django"):
+            app_ctx.app_plan_state.add_facts({"features": {"django": {"enabled": list(feature.apps)}}})
+
+    # Rollback is handled by upstream state restoration.
 
 
 @register("django:setup")
@@ -66,10 +87,10 @@ class DjangoSetup(Operation):
 
 
 @register("django:manage")
-class ManageCommand(Subprocess):
+class ManageCommand(ShellOperation):
     """Run a generic manage.py command."""
 
-    _shell = ManageCommandShell()
+    _shell = ManageCommandShell(None)
     label = "Manage command"
 
 
@@ -78,7 +99,7 @@ class CollectStatic(ManageCommand):
     """Run collectstatic project wide."""
 
     label = "Collect Static Files"
-    forward = ["collectstatic"]
+    forward: list[str] = ["collectstatic"]
 
 
 class MigrationState(OperationState):
@@ -115,16 +136,32 @@ class DjangoReconciliation(Plan):
     """
     Django reconciliation pipeline.
 
-    The provided extra ``operations`` will be run after all other ones (setup, migrate,
-    collecstatic).
+    It runs common post-install operations at a global level (not per-application),
+    such as migration or collectstatic.
+
+    Operations flowchart:
+
+        - :py:attr:`setup`: initialize Django (setup).
+        - :py:attr:`before_migrate` (optional): operations to run before migrations.
+        - :py:attr:`migrate`: apply migrations.
+        - :py:attr:`after_migrate` (optional): operations to run after migrations.
+        - :py:attr:`collectstatic` (optional, enabled by default): collect statics.
+        - :py:attr:`operations` (optional): other operations to run.
     """
 
     setup: DjangoSetup = Field(default_factory=DjangoSetup)
+    """ Operation ensuring django is setup. """
+    before_migrate: list[Operation] = Field(default_factory=list)
+    """ Operations to run before migrations happens. """
     migrate: Migrate = Field(default_factory=Migrate)
+    """ Apply Django migrations. """
+    after_migrate: list[Operation] = Field(default_factory=list)
+    """ Operation to run after Django migration. """
     collectstatic: CollectStatic | None = Field(default_factory=CollectStatic)
+    """ Collect static data. """
 
     def get_operations(self, state):
-        operations = [self.setup, self.migrate]
+        operations = [self.setup, *self.before_migrate, self.migrate, *self.after_migrate]
 
         if self.collectstatic:
             operations.append(self.collectstatic)

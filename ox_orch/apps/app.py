@@ -146,7 +146,7 @@ class AppRelease(Versioned):
     @model_validator(mode="before")
     def _set_default_package(cls, dat):
         if isinstance(dat, dict) and "package" not in dat:
-            dat["package"] = dat["package"]
+            dat["package"] = dat["id"]
         return dat
 
     @field_validator("dependencies", mode="before")

@@ -1,8 +1,10 @@
 [project]
-name = "demo-2"
+name = "django-project"
 version = "0.1.0"
-description = "Demo package 2 for Ox-Orch integration tests"
+description = "Demo django project for Ox-Orch tests"
 requires-python = ">=3.10"
+
+dependencies = ["Django>=5"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

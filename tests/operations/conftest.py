@@ -4,9 +4,9 @@ import pytest
 
 from ox_orch.core import state
 from ox_orch.core.contexts import ExecutionContext
-from ox_orch.operations import Plan, AppPlan, AppsContext, ReconciliationPlan, AppsPlan
+from ox_orch.operations import Plan
 
-from ..conftest import Operation, FakeInstall
+from ..conftest import Operation
 
 
 def apply(op, state, **kwargs):
@@ -64,31 +64,3 @@ def op_3():
 @pytest.fixture
 def plan(op, op_1):
     return Plan(operation_id="plan", operations=[op, op_1])
-
-
-@pytest.fixture
-def app_plan(app_meta, op, op_1):
-    return AppPlan(app=app_meta, operations=[op, op_1])
-
-
-@pytest.fixture
-def reconciliation(app_plan):
-    return ReconciliationPlan(app_plan=app_plan)
-
-
-@pytest.fixture
-def apps_plan(reconciliation, op, op_1, op_2, op_3):
-    return AppsPlan(
-        install=FakeInstall(),
-        reconciliation=reconciliation,
-        before_install=[op_1],
-        after_install=[op_2],
-        # app_plan=app_plan,
-        # pre_operations=[op, op_1],
-        # operations=[op_2, op_3],
-    )
-
-
-@pytest.fixture
-def apps_ctx(app_store, app_state_store, app_dep, app_dep_1):
-    return AppsContext(store=app_store, state_store=app_state_store, apps=[app_dep, app_dep_1])

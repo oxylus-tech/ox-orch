@@ -9,8 +9,15 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 
+from ox_orch.django import DjangoProject
+from ox_orch.apps import AppStateFileStore
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+django_project = DjangoProject(state_store=AppStateFileStore(Path(__file__).parent.parent.parent / "app_states.json"))
+django_project.state_store.load()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
 MEDIA_ROOT = BASE_DIR / "static" / "media"
 
 
@@ -22,9 +29,7 @@ ALLOWED_HOSTS = ["127.0.0.1"]
 SECRET_KEY = "django-insecure-bg*enkwcea%4xjcvkpbb_h@6#ue78#t1q(z^w@faagal7**^9i"
 
 # Application definition
-INSTALLED_APPS = [
-    # "django_filters",
-    "rest_framework",
+INSTALLED_APPS = django_project.get_installed_apps() + [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -45,7 +50,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "instance.urls"
+ROOT_URLCONF = "django_project.urls"
 SITE_ID = 1
 
 TEMPLATES = [
@@ -66,7 +71,7 @@ TEMPLATES = [
 
 
 # ASGI_APPLICATION = "ox.asgi.application"
-WSGI_APPLICATION = "instance.wsgi.application"
+WSGI_APPLICATION = "src.wsgi.application"
 
 
 # Database
@@ -116,16 +121,4 @@ LANGUAGE_COOKIE_NAME = "lang"
 STATIC_URL = "/static/"
 
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-REST_FRAMEWORK = {
-    "DEFAULT_FILTER_BACKENDS": [
-        "django_filters.rest_framework.DjangoFilterBackend",
-        "rest_framework.filters.SearchFilter",
-        "rest_framework.filters.OrderingFilter",
-    ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 50,
-}
+TEST_TAG = "django"

@@ -7,6 +7,9 @@ import yaml
 from pydantic import BaseModel
 
 
+from .pydantic import hydrate as hydrate_
+
+
 __all__ = ("FileBackend", "YAMLBackend", "JSONBackend", "backends")
 
 
@@ -34,10 +37,14 @@ class FileBackend(ABC):
         self.model_class = model_class
         self.as_list = as_list
 
-    def load(self, path: Path, **init_kwargs) -> BaseModel:
+    def load(self, path: Path, hydrate=False, **init_kwargs) -> BaseModel:
         """
         Load data from file, with extra initial arguments (overriding
         existing ones).
+
+        :param path: path to the file to load
+        :param hydrate: hydrate model assuming polymorphism.
+        :param **init_kwargs: extra model init arguments
         """
         with open(path, encoding="utf-8") as f:
             data = self.parse(f)
@@ -45,8 +52,13 @@ class FileBackend(ABC):
                 if not isinstance(data, list):
                     raise ValueError("Read data must be a list.")
 
+                if hydrate:
+                    return [hydrate_(self.model_class, dat) for dat in data]
+
                 return [self.model_class.model_validate({**init_kwargs, **dat}) for dat in data]
 
+            if hydrate:
+                return hydrate_(self.model_class, data)
             return self.model_class.model_validate({**init_kwargs, **data})
 
     def save(self, path: Path, obj: BaseModel | list[BaseModel]):

@@ -5,8 +5,8 @@ from ox_orch.core.state import Status
 
 from .base import OPERATION_REGISTRY, STATE_REGISTRY, RunContext, OperationState, Operation, RunPython
 from .plan import Plan
-from .apps import AppsContext, AppPlanState, AppPlan, ReconciliationPlan, AppsPlan
-from .subprocess import SubprocessOperation
+from .apps import AppContext, AppsContext, AppPlanState, AppPlan, ReconciliationPlan, AppsPlan
+from .shell import ShellOperation
 
 
 __all__ = (
@@ -19,13 +19,14 @@ __all__ = (
     "RunPython",
     # Plan
     "Plan",
+    "AppContext",
     "AppsContext",
     "AppPlan",
     "AppPlanState",
     "ReconciliationPlan",
     "AppsPlan",
     # Others
-    "SubprocessOperation",
+    "ShellOperation",
     # re-exports
     "Status",
 )

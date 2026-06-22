@@ -46,7 +46,7 @@ class ExecutionSpec(BaseModel):
     dry_run: bool = False
     """ Run in dry mode. """
     shell: ShellSpec | None = None
-    """ Subprocess cmd_runtime configuration. """
+    """ Shell cmd_runtime configuration. """
     inputs: dict[str, Any] = Field(default_factory=dict)
     """ User inputs injected into operations. """
 

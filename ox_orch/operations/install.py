@@ -19,7 +19,7 @@ from ox_orch.core import ExecutionContext, register
 from ox_orch.core.state import ChangeSet
 
 from .base import OperationState, Operation
-from .subprocess import SubprocessMixin
+from .shell import ShellMixin
 
 
 __all__ = (
@@ -38,7 +38,7 @@ class InstallState(ChangeSet, OperationState):
     pass
 
 
-class InstallOperation(SubprocessMixin, Operation):
+class InstallOperation(ShellMixin, Operation):
     """Install packages using pip.
 
     There are two context values required

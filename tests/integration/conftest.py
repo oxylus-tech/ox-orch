@@ -34,14 +34,14 @@ def app_store_demo(data_dir):
         name="Demo 2",
         version="0.1.0",
         package="demo_2",
-        source=str((data_dir / "packages/demo_2").resolve()),
+        source=str((data_dir / "packages" / "demo_2").resolve()),
     )
     demo_1 = Application(
         id="demo-1",
         name="Demo 1",
         version="0.1.0",
         package="demo_1",
-        source=str((data_dir / "packages/demo_1").resolve()),
+        source=str((data_dir / "packages" / "demo_1").resolve()),
         dependencies=["demo-2@0.1.0"],
     )
     return AppMemoryStore(items=[demo_1, demo_2])

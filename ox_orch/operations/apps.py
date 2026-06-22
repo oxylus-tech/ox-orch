@@ -5,7 +5,7 @@ from typing import Any, Iterable
 
 from pydantic import Field, field_validator
 
-from ox_orch.apps import Application, AppState, AppStore, AppStateStore, AppStateMemoryStore
+from ox_orch.apps import Application, AppState, AppStore, AppStateStore, AppStateMemoryStore, InstallOrigin
 from ox_orch.core import register, Status, ChangeSet
 from .base import Operation
 from .plan import Plan, PlanState
@@ -48,8 +48,6 @@ class AppsContext:
 class AppPlanState(PlanState):
     """State for the AppPlan operation."""
 
-    app_id: str
-    """ Application id. """
     app: Application
     """ Application metadata used for install. """
     target_version: str
@@ -71,7 +69,7 @@ class AppPlanState(PlanState):
             for key, feature in features.items():
                 target.setdefault(key, {}).update(feature)
 
-        self.facts.udpate((k, v) for k, v in facts.items() if k != "features")
+        self.facts.update((k, v) for k, v in facts.items() if k != "features")
 
 
 @register("app")
@@ -88,7 +86,6 @@ class AppPlan(Plan):
 
     def create_state(self, **kwargs):
         return super().create_state(
-            app_id=self.app.id,
             app=self.app,
             target_version=self.app.version,
             version=self.app.get_installed_version(),
@@ -113,12 +110,16 @@ class ReconciliationState(ChangeSet, PlanState):
 
 
 @register("reconciliation")
-class ReconciliationPlan(Operation):
+class ReconciliationPlan(Plan):
     """
-    Run reconciliation for the provided applications.
+    This operation is used to apply a nested operation on updated packages.
 
-    When a registry is provided, it will run only for the packages whose
-    installed version differs from registry's one.
+    It will first resolves which package have been updated after an installation,
+    by comparing their version to the application state store.
+
+    For each application that has been updated, it will run the nested
+    :py:attr:`app_plan` operation. It then collect the :py:attr:`AppState.facts`
+    as updates of application state to apply.
     """
 
     __state_class__ = ReconciliationState
@@ -132,6 +133,10 @@ class ReconciliationPlan(Operation):
         if not apps:
             return
 
+        # Keep track of ids required by user
+        ids = {app.id for app in apps}
+
+        # Resolve dependencies
         if store := apps_ctx.store:
             apps = store.resolve([a.ref for a in apps])
 
@@ -154,6 +159,7 @@ class ReconciliationPlan(Operation):
             kw = {
                 **op_state.facts,
                 "status": Status.COMPLETED,
+                "origin": InstallOrigin.USER if op_state.app.id in ids else InstallOrigin.DEPENDENCY,
                 "package": op_state.app.package,
             }
             state.add_changes(op_state.app.id, kw)
@@ -194,15 +200,23 @@ class AppsPlan(Plan):
 
         - Install packages (pip/poetry/uv/etc)
         - Detect implicit updates & run reconciliation
-        - Update state store with the installed versions
+        - Update state store with the gathered applications states updates.
 
-    Typical workflow induces:
+    Operations flowchart:
 
         - :py:attr:`before_install` (optional): operations to run before packages install.
         - :py:attr:`install`: install python packages
         - :py:attr:`after_install` (optional): operations to run after packages install.
-        - :py:attr:`reconciliation` (optional): application reconciliation.
-        - :py:attr:`after_reconciliation` (optional): operations to run after reconciliation.
+        - :py:attr:`reconciliation` (optional): application reconciliation
+          (see :py:class:`Reconciliation` for more info).
+        - :py:attr:`operations` (optional): other operations to run.
+
+    .. note::
+
+        This class assumes that any child's state that subclasses a
+        :py:class:`~ox_orch.core.state.ChangeSet` is used
+        to provide application state updates.
+
     """
 
     __apply_spec__ = {"apps_ctx": AppsContext}
@@ -236,8 +250,6 @@ class AppsPlan(Plan):
     """ Operations to run before packages installation. """
     after_install: list[Operation] = Field(default_factory=list)
     """ Operations to run before packages installation. """
-    after_reconciliation: list[Operation] = Field(default_factory=list)
-    """ Operations to run after applications reconciliation. """
 
     @field_validator("reconciliation", mode="before")
     @classmethod
@@ -246,16 +258,13 @@ class AppsPlan(Plan):
         Reconciliation validator allowing to provide a list or tuple of operations.
         The operations will be added to the ReconciliationPlan's AppPlan.
         """
-        if isinstance(value, ReconciliationPlan):
-            return value
-
-        if isinstance(value, AppPlan):
-            return ReconciliationPlan(app_plan=value)
-
-        if isinstance(value, (list, tuple)):
-            return ReconciliationPlan(app_plan=AppPlan(operations=value))
-
-        return value
+        match value:
+            case AppPlan():
+                return ReconciliationPlan(app_plan=value)
+            case list() | tuple():
+                return ReconciliationPlan(app_plan=AppPlan(operations=value))
+            case _:
+                return value
 
     def get_operations(self, state):
         items = [
@@ -265,7 +274,7 @@ class AppsPlan(Plan):
         ]
         if self.reconciliation is not None:
             items.append(self.reconciliation)
-        return items + self.after_reconciliation
+        return items + self.operations
 
     def _apply(self, state, ctx, apps_ctx: AppsContext, **inputs):
         yield from super()._apply(state, ctx, apps_ctx=apps_ctx, apps=apps_ctx.apps, **inputs)
@@ -277,7 +286,7 @@ class AppsPlan(Plan):
             state.set_backward(key, app_states.get(key))
 
         if state.forward:
-            state_store.partial_commit(state.forward, allow_create=True)
+            state_store.partial_commit(state.forward, allow_create=True, merge=True)
 
     def _rollback(self, state, ctx, apps_ctx: AppsContext, **inputs):
         yield from super()._rollback(state, ctx, apps_ctx=apps_ctx, **inputs)

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 
 
 from .files import FileBackend, JSONBackend
+from .pydantic import PolymorphicModel
 
 
 __all__ = ("StoreMetadata", "Store", "MemoryStore", "FileStoreModel", "FileStore")
@@ -130,7 +131,7 @@ class Store(ABC, Generic[K, V]):
         pass
 
     @abstractmethod
-    def partial_commit(self, updates: dict[K, dict[str, Any] | None], allow_create: bool = False):
+    def partial_commit(self, updates: dict[K, dict[str, Any] | None], allow_create: bool = False, merge: bool = False):
         """
         Partial update of items, provided as dict of updates by object key.
 
@@ -138,6 +139,16 @@ class Store(ABC, Generic[K, V]):
         store.
         When object is not present, either create new one (on ``allow_create``)
         or raises a ``KeyError``.
+
+        The different backend implementations shall not try to deep merge the objects.
+        However some subclasses may want to have specific behaviors, for example
+        application state want its features to merge. They can implement it, on the
+        condition this behavior is enabled by the ``merge`` attribute only.
+
+
+        :param updates: dict of updates to apply
+        :param allow_create: allow new object creation. You must ensure in this case to provide sufficient model data.
+        :param merge: allow some attributes to merge.
         """
         pass
 
@@ -146,7 +157,7 @@ class Store(ABC, Generic[K, V]):
         """Delete item from the store."""
         pass
 
-    def item_update(self, item: V, values: dict[str, Any] | Iterable[tuple[str, Any]]):
+    def item_update(self, item: V, values: dict[str, Any] | Iterable[tuple[str, Any]], merge: bool = False):
         """
         Update an item owned by the store inplace using the provided values.
 
@@ -156,6 +167,10 @@ class Store(ABC, Generic[K, V]):
         The default implementation simply update the item attributes based on the
         provided fields. It thus can be reused for other objects than the model
         instance specified on the store.
+
+        :param item: item to update
+        :param values: new values
+        :param merge: see :py:meth:`partial_commit` about this argument.
         """
         if isinstance(values, dict):
             values = values.items()
@@ -192,7 +207,7 @@ class MemoryStore(Store[K, V]):
     def commit(self, items: Iterable[V] | None) -> None:
         self.data.update((self.get_key(item), item) for item in items)
 
-    def partial_commit(self, updates, allow_create: bool = False):
+    def partial_commit(self, updates, allow_create: bool = False, merge: bool = False):
         for key, values in updates.items():
             if values is None:
                 self.delete(key)
@@ -208,7 +223,7 @@ class MemoryStore(Store[K, V]):
                 values = {**values, self.key: key}
                 self.data[key] = self.model_class(**values)
             else:
-                self.item_update(obj, values)
+                self.item_update(obj, values, merge)
 
     def delete(self, key: K) -> None:
         self.data.pop(key, None)
@@ -217,7 +232,7 @@ class MemoryStore(Store[K, V]):
         return key in self.data
 
 
-class FileStoreModel(BaseModel, Generic[K, V]):
+class FileStoreModel(PolymorphicModel, Generic[K, V]):
     """
     Persistent representation of a Store.
 
@@ -236,6 +251,7 @@ class FileStore(MemoryStore[K, V]):
     """
 
     backend: FileBackend = JSONBackend(FileStoreModel)
+    hydrate: bool = True
 
     def __init__(
         self,
@@ -260,8 +276,8 @@ class FileStore(MemoryStore[K, V]):
         if not self.path.exists():
             return
 
-        model = self.backend.load(self.path)
-        self.data = {key: self.model_class(**dat) for key, dat in model.data.items()}
+        model = self.backend.load(self.path, hydrate=self.hydrate)
+        self.data = model.data
         self.metadata = model.metadata
         return model
 

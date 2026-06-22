@@ -2,18 +2,30 @@ from dataclasses import dataclass
 from collections import defaultdict
 from pathlib import Path
 
-from django.db import connections
-from django.db.migrations.executor import MigrationExecutor
 from pydantic import Field
 
 from ox_orch.core import register
-from ox_orch.apps import AppStore, AppStateFeature, AppStateStore, AppStateStoreFeature
+from ox_orch.apps import Application, AppFeature, AppStore, AppStateFeature, AppStateStore, AppStateStoreFeature
+
+
+@register("django")
+class DjangoAppFeature(AppFeature):
+    """
+    Application feature for Django.
+    """
+
+    apps: list[str]
+    """ Django application paths, following INSTALLED_APPS order. """
 
 
 @register("django")
 class DjangoStateFeature(AppStateFeature):
-    enabled: bool = False
-    """ Whether app is enabled or not. """
+    """Application state feature for Django."""
+
+    enabled: list[str] = Field(default_factory=list)
+    """
+    The list of enabled Django application paths.
+    """
 
 
 @register("django")
@@ -37,8 +49,8 @@ class DjangoProject:
     as enabled applications.
     """
 
-    store: AppStore
     state_store: AppStateStore
+    store: AppStore | None = None
 
     def setup(self, settings_module: str, project_path: Path | None = None):
         """
@@ -57,6 +69,40 @@ class DjangoProject:
         os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
         django.setup()
 
+    def get_feature(self) -> DjangoStateStoreFeature:
+        """Get or create django feature."""
+        if "django" not in self.state_store.features:
+            feature = DjangoStateStoreFeature()
+            self.state_store.features["django"] = feature
+            return feature
+        return self.state_store.features["django"]
+
+    def get_installed_apps(self) -> list[str]:
+        """
+        Return installed application.
+
+        Shorthand to access :py:attr:`DjangoStateStoreFeature.installed_apps`.
+        """
+        if feature := self.state_store.features.get("django"):
+            return feature.installed_apps
+        return []
+
+    def enable(self, apps: list[Application]):
+        """Enable applications and synchronize stores."""
+        app_ids = [app.id for app in apps]
+        app_states = {st.id: st for st in self.state_store.get_all(app_ids)}
+
+        commits, updates = [], {}
+        for app in apps:
+            enabled = {"django": DjangoStateFeature(enabled=app.features["django"].apps)}
+            if app_state := app_states.get(app.id):
+                updates[app_state.id] = {"features": enabled}
+            else:
+                commits.append(app.create_state(features=enabled))
+
+        self.state_store.commit(commits)
+        self.state_store.partial_commit(updates, merge=True)
+
     def sync_installed_apps(self):
         """
         Update the list of :py:attr:`~DjangoStateStoreFeature.installed_apps`.
@@ -64,13 +110,15 @@ class DjangoProject:
         This will scan application states store to determine which ones to update
         and reverse order apps by dependencies.
         """
-        enabled = [st.ref for st in self.state_store.all() if "django" in st.features and st.features["django"]]
-        releases = self.store.resolve(enabled)
+        self._assert_has_store()
+
+        d_states = {st.ref: st for st in self.state_store.all() if st.features.get("django")}
+        releases = self.store.resolve(d_states.keys())
 
         installed_apps = []
         for release in releases:
-            if feat := release.features.get("django"):
-                installed_apps.append(feat.app_label)
+            if d_state := d_states.get(release.ref):
+                installed_apps.extend(d_state.features["django"].enabled)
 
         # We reverse the order since Django application dependencies in INSTALLED_APPS
         # are reverse ordered. Dependant applications appear before dependencies.
@@ -79,13 +127,8 @@ class DjangoProject:
         feature = self.get_feature()
         feature.installed_apps = installed_apps
 
-    def get_feature(self) -> DjangoStateStoreFeature:
-        """Get or create django feature."""
-        if "django" not in self.state_store.features:
-            feature = DjangoStateStoreFeature()
-            self.state_store.features["django"] = feature
-            return feature
-        return self.state_store.features["django"]
+        if hasattr(self.state_store, "save"):
+            self.state_store.save()
 
     # ---- Migrations
     def snapshot_migrations(self) -> dict[str, list[str]]:
@@ -118,4 +161,11 @@ class DjangoProject:
 
     def get_migration_executor(self):
         """Return migration executor."""
+        from django.db import connections
+        from django.db.migrations.executor import MigrationExecutor
+
         return MigrationExecutor(connections["default"])
+
+    def _assert_has_store(self):
+        if self.store is None:
+            raise ValueError("To run this method, you must provide an application store.")

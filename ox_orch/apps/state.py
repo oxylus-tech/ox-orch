@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import Field
 
 
-from ox_orch.core import stores, JSONBackend, Registry, PolymorphicModel, State
+from ox_orch.core import stores, JSONBackend, Registry, PolymorphicModel, State, FileBackend
 from .app import Versioned, Application
 
 
@@ -21,6 +21,7 @@ __all__ = (
 )
 
 
+# TODO: replace later with the run context triggers
 class InstallOrigin(Enum):
     USER = "user"
     DEPENDENCY = "dependency"
@@ -83,7 +84,7 @@ class AppStateStoreFeature(PolymorphicModel):
 class AppStateStoreModel(stores.FileStoreModel):
     """Provide features to the AppStateStore."""
 
-    features: dict[str, AppStateFeature] = Field(default_factory=dict)
+    features: dict[str, AppStateStoreFeature] = Field(default_factory=dict)
     """ Optional features extension data. """
 
 
@@ -92,7 +93,6 @@ class AppStateStore(stores.Store):
 
     model_class = AppState
     key = "id"
-    backend = JSONBackend(AppStateStoreModel)
     features: dict[str, AppStateStoreFeature] = None
 
     def __init__(self, *args, features: dict[str, AppStateStoreFeature] | None = None, **kwargs):
@@ -112,21 +112,29 @@ class AppStateStore(stores.Store):
             self.commit([state])
         return state
 
-    def item_update(self, item: AppState, values: dict[str, Any]):
+    def item_update(self, item: AppState, values: dict[str, Any], merge: bool = False):
         """
         Item update handling features partial update.
         """
+        if not merge:
+            super().item_update(item, values)
+            return
+
         features = item.features
 
         for field, value in values.items():
-            if field != "features":
-                setattr(item, field, value)
-            else:
-                for name, feature_vals in value.items():
-                    if name not in features:
-                        item.features[name] = AppStateFeature.from_type(name, **feature_vals)
-                    else:
-                        super().item_update(item.features[name], feature_vals)
+            match field:
+                case "features":
+                    for name, feature_vals in value.items():
+                        if name not in features:
+                            item.features[name] = AppStateFeature.from_type(name, **feature_vals)
+                        else:
+                            super().item_update(item.features[name], feature_vals)
+                case "origin":
+                    if item.origin == InstallOrigin.DEPENDENCY:
+                        item.origin = value
+                case _:
+                    setattr(item, field, value)
 
 
 class AppStateMemoryStore(AppStateStore, stores.MemoryStore):
@@ -134,6 +142,8 @@ class AppStateMemoryStore(AppStateStore, stores.MemoryStore):
 
 
 class AppStateFileStore(AppStateStore, stores.FileStore):
+    backend: FileBackend = JSONBackend(AppStateStoreModel)
+
     def load(self):
         model = super().load()
         self.features = model.features
