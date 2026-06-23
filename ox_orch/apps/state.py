@@ -84,6 +84,7 @@ class AppStateStoreFeature(PolymorphicModel):
 class AppStateStoreModel(stores.FileStoreModel):
     """Provide features to the AppStateStore."""
 
+    data: dict[str, AppState] = Field(default_factory=dict)
     features: dict[str, AppStateStoreFeature] = Field(default_factory=dict)
     """ Optional features extension data. """
 
@@ -93,6 +94,7 @@ class AppStateStore(stores.Store):
 
     model_class = AppState
     key = "id"
+    data: dict[str, AppState] = Field(default_factory=dict)
     features: dict[str, AppStateStoreFeature] = None
 
     def __init__(self, *args, features: dict[str, AppStateStoreFeature] | None = None, **kwargs):

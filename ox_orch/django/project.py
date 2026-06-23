@@ -88,8 +88,14 @@ class DjangoProject:
         return []
 
     def enable(self, apps: list[Application]):
-        """Enable applications and synchronize stores."""
-        app_ids = [app.id for app in apps]
+        """Enable applications (store is not updated).
+
+        It only update application state informations, but don't synchronize
+        the store. Once you've called this method, you must call
+        :py:meth:`sync_installed_apps` to apply those changes.
+        """
+        apps = [app for app in apps if app.features.get("django")]
+        app_ids = (app.id for app in apps)
         app_states = {st.id: st for st in self.state_store.get_all(app_ids)}
 
         commits, updates = [], {}
@@ -100,8 +106,24 @@ class DjangoProject:
             else:
                 commits.append(app.create_state(features=enabled))
 
-        self.state_store.commit(commits)
-        self.state_store.partial_commit(updates, merge=True)
+        commits and self.state_store.commit(commits)
+        updates and self.state_store.partial_commit(updates, merge=True)
+
+    def disable(self, apps: list[Application]):
+        """Disable applications and synchronize stores.
+
+        Works as :py:meth:`enable` but on the other direction.
+        """
+        apps = [app for app in apps if app.features.get("django")]
+        app_ids = (app.id for app in apps)
+        app_states = {st.id: st for st in self.state_store.get_all(app_ids)}
+
+        updates = {}
+        for app in apps:
+            if app_state := app_states.get(app.id):
+                updates[app_state.id] = {"features": {"django": {"enabled": []}}}
+
+        updates and self.state_store.partial_commit(updates, merge=True)
 
     def sync_installed_apps(self):
         """
@@ -131,10 +153,9 @@ class DjangoProject:
             self.state_store.save()
 
     # ---- Migrations
-    def snapshot_migrations(self) -> dict[str, list[str]]:
+    def get_applied_migrations(self) -> dict[str, list[str]]:
         """Get a snapshot of migrations."""
         executor = self.get_migration_executor()
-
         result = defaultdict(list)
 
         for app_label, migration_name in executor.loader.applied_migrations:
@@ -142,22 +163,25 @@ class DjangoProject:
 
         return dict(result)
 
-    def restore_migrations(self, snapshot: dict[str, list[str]]):
-        """Restore migrations to a provided snapshot."""
+    def restore_migrations(self, snapshot):
         executor = self.get_migration_executor()
+        current = self.get_applied_migrations()
 
-        targets = []
-
+        targets = {}
         for app_label in executor.loader.migrated_apps:
-            migrations = snapshot.get(app_label)
+            current_list = current.get(app_label, [])
+            snapshot_list = snapshot.get(app_label, [])
 
-            if migrations:
-                targets.append((app_label, migrations[-1]))
+            if len(current_list) <= len(snapshot_list):
+                continue
+
+            if snapshot_list:
+                targets[app_label] = snapshot_list[-1]
             else:
-                targets.append((app_label, None))
+                targets[app_label] = None
 
-        # Django will handle dependencies resolution.
-        executor.migrate(targets)
+        if targets:
+            executor.migrate(targets.items())
 
     def get_migration_executor(self):
         """Return migration executor."""

@@ -10,7 +10,7 @@ A typical setup will be:
   using :py:meth:`~.project.DjangoProject.get_installed_apps`.
 - The AppsPlan includes:
     - :py:class:`~.operations.DjangoEnable`: enable Django applications on the project;
-    - :py:class:`~.operations.DjangoReconciliation`: ensure whole initialization/update
+    - :py:class:`~.operations.DjangoProjectSync`: ensure whole initialization/update
       pipeline. Note that you'll have to ensure to run it in a distinct sub-process (see below).
 
 
@@ -21,14 +21,14 @@ It is by design not possible to setup Django multiple times, or add a new
 Django application once the Django apps registry has been fullfilled. Django
 just does not allow it.
 
-It means that you can run DjangoReconciliation only for *one project per process*,
+It means that you can run DjangoProjectSync only for *one project per process*,
 and that you can't expect to dynamically update the INSTALLED_APPS.
 
 This leaves us two strategies:
 
 - Either ox_orch workflow is run within the project, and you don't expect new
   applications to be enabled.
-- Or you run DjangoReconciliation in a :py:class:`~ox_orch.operations.multiprocess.ForkOperation`:
+- Or you run DjangoProjectSync in a :py:class:`~ox_orch.operations.multiprocess.ForkOperation`:
   the operation will be run from a new subprocess.
 
 The latest solution allows to use :py:class:`~project.DjangoProject` to declare
@@ -50,7 +50,7 @@ from .operations import (
     CollectStatic,
     MigrationState,
     Migrate,
-    DjangoReconciliation,
+    DjangoProjectSync,
 )
 from .shell import ManageCommandShell
 
@@ -67,6 +67,6 @@ __all__ = (
     "CollectStatic",
     "MigrationState",
     "Migrate",
-    "DjangoReconciliation",
+    "DjangoProjectSync",
     "ManageCommandShell",
 )

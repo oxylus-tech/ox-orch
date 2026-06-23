@@ -1,19 +1,48 @@
 from __future__ import annotations
-from typing import Type, Iterable
+from typing import ClassVar, Type, Iterable
+
+from pydantic import BaseModel
+from pydantic.fields import PydanticUndefined
 
 
-__all__ = ("Registry", "RegisteredClass", "register")
+__all__ = (
+    "Registry",
+    "RegisteredClass",
+    "register",
+    "ModelFieldInfo",
+    "ModelInfo",
+    "DocumentedClass",
+    "DocumentedRegistry",
+)
+
+
+class RegisteredClass:
+    """
+    Base class for all registry-enabled types.
+
+    This provides:
+    - __type_id__ declaration
+    - optional __registry__ binding
+    """
+
+    __type_id__: str | None = None
+    __registry__: Registry | None = None
 
 
 class Registry:
     """Stores class mappings per domain."""
 
+    _enforce_subclass: Type[RegisteredClass] = RegisteredClass
+
     def __init__(self):
         self._registry: dict[str, Type] = {}
 
     def register(self, key: str, cls: Type):
+        if not issubclass(cls, self._enforce_subclass):
+            raise ValueError(f"[{key}] {cls.__name__} is not a subclass of {self._enforce_subclass.__name__}.")
+
         if obj := self._registry.get(key):
-            raise ValueError(f"Duplicate type_id: {key}, declared {obj.__module__}")
+            raise ValueError(f"[{key} Duplicate type_id, already declared in {obj.__module__}.")
         self._registry[key] = cls
 
     def get(self, key: str) -> Type:
@@ -43,17 +72,102 @@ class Registry:
         return key in self._registry
 
 
-class RegisteredClass:
-    """
-    Base class for all registry-enabled types.
+class ModelFieldInfo(BaseModel):
+    name: str
+    description: str = ""
+    """ Human description of the field. """
+    default: str | None = None
+    """ Default value as displayed to human.
 
-    This provides:
-    - __type_id__ declaration
-    - optional __registry__ binding
+    When None, field is required.
     """
 
-    __type_id__: str | None = None
-    __registry__: Registry | None = None
+    @property
+    def required(self):
+        return self.default is None
+
+
+class ModelInfo(BaseModel):
+    """
+    Provide information about a model that is registered to a :py:`DocumentedRegistry`.
+    """
+
+    type_id: str
+    label: str
+    description: str
+    fields: list[ModelFieldInfo]
+
+    @classmethod
+    def from_model_class(cls, model: Type[DocumentedClass], skip_no_doc: bool = False) -> ModelInfo | None:
+        """
+        Return instance of ModelInfo using the provided model class.
+
+        It will interpret the declared information on the model as:
+
+        - label and description;
+        - declared fields and their default value or description
+
+        :param model: the pydantic model class;
+        :param skip_no_doc: if true, skip fields not providing description;
+        """
+        if not model.__dict__.get("__type_id__"):
+            return None
+
+        fields = []
+        for name, field in model.__pydantic_fields__.items():
+            if skip_no_doc and not field.description:
+                continue
+
+            default = ""
+            if field.default != PydanticUndefined:
+                default = str(field.default)
+            elif field.default_factory:
+                default = field.default_factory.__name__
+
+            fields.append(
+                ModelFieldInfo(
+                    name=name,
+                    description=field.description or "",
+                    default=default,
+                )
+            )
+        return cls(
+            type_id=model.__type_id__,
+            label=model._label or model.__type_id__,
+            description=model._description,
+            fields=fields,
+        )
+
+
+class DocumentedClass(RegisteredClass):
+    """
+    Subclass to use in conjunction with a :py:class:`DocumentedRegistry`
+    """
+
+    _label: ClassVar[str]
+    """ Human readable name of the object. """
+    _description: ClassVar[str] = ""
+    """ Human readable description of the object. """
+
+
+class DocumentedRegistry(Registry):
+    """
+    A registry that provides human readable information about its registered classes.
+
+    Those information can be fetched using :py:meth:`get_info`.
+
+    Only :py:class:`DocumentedClass` subclasses can be registered here.
+    """
+
+    _enforce_subclass = DocumentedClass
+
+    def get_infos(self, skip_no_doc: bool = False) -> list[ModelInfo]:
+        """Return information about the registered elements."""
+        return [
+            ModelInfo.from_model_class(op_cls, skip_no_doc=skip_no_doc)
+            for op_cls in self.values()
+            if op_cls.__dict__.get("__type_id__")
+        ]
 
 
 def register(type_id: str | None = None, registry: Registry | None = None):

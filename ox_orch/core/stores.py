@@ -175,6 +175,9 @@ class Store(ABC, Generic[K, V]):
         if isinstance(values, dict):
             values = values.items()
 
+        if isinstance(item, dict):
+            breakpoint()
+
         for field, value in values:
             setattr(item, field, value)
 
@@ -223,6 +226,8 @@ class MemoryStore(Store[K, V]):
                 values = {**values, self.key: key}
                 self.data[key] = self.model_class(**values)
             else:
+                if isinstance(obj, dict):
+                    breakpoint()
                 self.item_update(obj, values, merge)
 
     def delete(self, key: K) -> None:

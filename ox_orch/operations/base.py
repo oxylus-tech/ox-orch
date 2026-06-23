@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import inspect
 import logging
 from typing import Callable, Generator, ClassVar, Sequence, Type
@@ -9,16 +10,17 @@ from pydantic import Field
 from ox_orch.apps import Application
 from ox_orch.core.contexts import RunContext, ExecutionContext
 from ox_orch.core.pydantic import LazyTranslation, PolymorphicModel
-from ox_orch.core.registry import register, Registry
+from ox_orch.core.registry import register, DocumentedRegistry, DocumentedClass
 from ox_orch.core.state import HistoryState, Status
 
 
 __all__ = (
     "Status",  # re-export for convenience
-    "RunContext",
     "OperationState",
     "Operation",
     "RunPython",
+    "DelegateState",
+    "DelegateOperation",
     "STATE_REGISTRY",
     "OPERATION_REGISTRY",
 )
@@ -27,12 +29,12 @@ __all__ = (
 logger = logging.getLogger("ox-orch")
 
 
-STATE_REGISTRY = Registry()
-OPERATION_REGISTRY = Registry()
+STATE_REGISTRY = DocumentedRegistry()
+OPERATION_REGISTRY = DocumentedRegistry()
 
 
 @register("operation")
-class OperationState(HistoryState, PolymorphicModel):
+class OperationState(HistoryState, PolymorphicModel, DocumentedClass):
     """
     Keep state informations of an operation.
     """
@@ -57,7 +59,7 @@ class OperationState(HistoryState, PolymorphicModel):
         return f"{type(self).__name__}@{self.operation_id} (status={self.status})"
 
 
-class Operation(PolymorphicModel):
+class Operation(PolymorphicModel, DocumentedClass):
     """
     Abstract base class for all install operations.
 
@@ -121,8 +123,10 @@ class Operation(PolymorphicModel):
     """
 
     uuid: UUID = Field(default_factory=uuid4)
-    label: ClassVar[LazyTranslation] = ""
+    _label: ClassVar[LazyTranslation] = ""
     """ Human readable text (can be Django lazy translation string) """
+    _description: ClassVar[str] = ""
+    """ Human description of this operation. """
 
     @property
     def id(self):
@@ -349,10 +353,52 @@ class RunPython(Operation):
 
     forward: Callable[(Application, Operation), None]
     backward: Callable[(Application, Operation), None]
-    label = "🐍 Run python code"
+    _label = "🐍 Run python code"
+    _description = "Run python code. Internal usage only: you can't use it from specification file or API."
 
     def _apply(self, *args, **context):
         self.forward(self, *args, **context)
 
     def _rollback(self, *args, **context):
         self.backward(self, *args, **context)
+
+
+class DelegateState(OperationState):
+    """
+    Operation state for a :py:class:`ParentOperation`.
+    The nested operation state resides in :py:attr:`child`.
+    """
+
+    child: OperationState | None = None
+
+
+class DelegateOperation(Operation, ABC):
+    """
+    An abstract class for operation that requires to run a nested one.
+    """
+
+    __state_class__ = DelegateState
+
+    operation: Operation = Field(description="The operation to run inside this one.")
+
+    def _apply(self, state, *args, **kwargs):
+        if state.child is None:
+            state.child = self.operation.create_state()
+        for child_st in self.child_apply(state, *args, **kwargs):
+            state.child = child_st
+            yield child_st
+            yield state
+
+    def _rollback(self, state, *args, **kwargs):
+        for child_st in self.child_rollback(state, *args, **kwargs):
+            state.child = child_st
+            yield child_st
+            yield state
+
+    @abstractmethod
+    def child_apply(self, state: DelegateState, *args, **kwargs) -> Generator[OperationState, None]:
+        pass
+
+    @abstractmethod
+    def child_rollback(self, state: DelegateState, *args, **kwargs) -> Generator[OperationState, None]:
+        pass

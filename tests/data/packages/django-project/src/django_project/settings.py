@@ -18,7 +18,8 @@ django_project = DjangoProject(state_store=AppStateFileStore(Path(__file__).pare
 django_project.state_store.load()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-MEDIA_ROOT = BASE_DIR / "static" / "media"
+STATIC_ROOT = BASE_DIR / "static"
+MEDIA_ROOT = STATIC_ROOT / "media"
 
 
 DEBUG = True
@@ -119,6 +120,5 @@ LANGUAGE_COOKIE_NAME = "lang"
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 STATIC_URL = "/static/"
-
 
 TEST_TAG = "django"

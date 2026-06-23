@@ -8,6 +8,7 @@ from pydantic import Field, field_validator
 from ox_orch.apps import Application, AppState, AppStore, AppStateStore, AppStateMemoryStore, InstallOrigin
 from ox_orch.core import register, Status, ChangeSet
 from .base import Operation
+from .install import InstallOperation
 from .plan import Plan, PlanState
 
 
@@ -52,7 +53,7 @@ class AppPlanState(PlanState):
     """ Application metadata used for install. """
     target_version: str
     """ Version expected by registry update. """
-    version: str
+    version: str | None = None
     """ Version detected in environment before execution. """
     facts: dict[str, Any] = Field(default_factory=dict)
     """
@@ -81,8 +82,10 @@ class AppPlan(Plan):
     """
 
     __state_class__ = AppPlanState
+    _label = "Application Plan"
+    _description = "Apply nested `operations` on a single application."
 
-    app: Application | None = None
+    app: Application | None = Field(default=None, description="The related application to work with.")
 
     def create_state(self, **kwargs):
         return super().create_state(
@@ -93,13 +96,16 @@ class AppPlan(Plan):
         )
 
     def get_inputs(self, state, apps_ctx, **inputs):
-        inputs["app_ctx"] = AppContext(
+        inputs["app_ctx"] = self.get_app_context(state, apps_ctx)
+        return super().get_inputs(state, apps_ctx=apps_ctx, **inputs)
+
+    def get_app_context(self, state: AppPlanState, apps_ctx):
+        return AppContext(
             app=self.app,
             app_state=apps_ctx.state_store.get_or_create(self.app),
             app_plan=self,
             app_plan_state=state,
         )
-        return super().get_inputs(state, apps_ctx=apps_ctx, **inputs)
 
 
 @register("reconciliation")
@@ -125,8 +131,14 @@ class ReconciliationPlan(Plan):
     __state_class__ = ReconciliationState
     __apply_spec__ = ("apps_ctx",)
     __full_inputs__ = True
+    _label = "Reconciliation Plan"
+    _description = (
+        "Detect updates based on provided applications and their dependencies, "
+        "and run an Application Plan for each."
+        ""
+    )
 
-    app_plan: AppPlan
+    app_plan: AppPlan = Field(description="The application plan to apply.")
 
     def _apply(self, state, ctx, apps_ctx: AppsContext, **inputs):
         apps = apps_ctx.apps
@@ -222,10 +234,28 @@ class AppsPlan(Plan):
     __apply_spec__ = {"apps_ctx": AppsContext}
     __rollback_spec__ = {"apps_ctx": AppsContext}
     __state_class__ = AppsState
+    _label = "Applications Plan"
+    _description = (
+        "Run application packages installation, optional Reconciliation Plan and "
+        "other operations. This is the main plan to use when you want to install "
+        "or update applications.\n"
+        "The flowchart of operations is:\n"
+        "- `before_install`\n"
+        "- `install`\n"
+        "- `after_install`\n"
+        "- `reconciliation`\n"
+        "- declared `operations`"
+    )
 
-    install: Operation
+    install: InstallOperation = Field(description="The package install operation.")
     """ Installation plan (as PipInstall). """
-    reconciliation: ReconciliationPlan | None = None
+    reconciliation: ReconciliationPlan | None = Field(
+        default=None,
+        description=(
+            "The reconciliation plan for updated applications. Note that you can "
+            "also provide an application plan or a list of operations."
+        ),
+    )
     """
     Implicit update plan that will be run for each updated application.
 
@@ -246,9 +276,13 @@ class AppsPlan(Plan):
     The reconciliation will be built up with an :py:class:`AppPlan` containing
     those operations.
     """
-    before_install: list[Operation] = Field(default_factory=list)
+    before_install: list[Operation] = Field(
+        default_factory=list, description="Operations to run before package installation."
+    )
     """ Operations to run before packages installation. """
-    after_install: list[Operation] = Field(default_factory=list)
+    after_install: list[Operation] = Field(
+        default_factory=list, description="Operations to run after packages installation, and before reconciliation."
+    )
     """ Operations to run before packages installation. """
 
     @field_validator("reconciliation", mode="before")

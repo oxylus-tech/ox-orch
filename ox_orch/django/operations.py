@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 
 from django.core.management import call_command
@@ -18,10 +19,11 @@ __all__ = (
     "CollectStatic",
     "MigrationState",
     "Migrate",
-    "DjangoReconciliation",
+    "DjangoProjectSync",
 )
 
 
+@dataclass
 class DjangoContext:
     """
     This provide context information to run Django related operations.
@@ -47,21 +49,24 @@ class DjangoContext:
 @register("django:enable")
 class DjangoEnable(Operation):
     """
-    Enable all Django applications of an Application.
+    Enable all Django applications of provided Applications.
 
     Currently we don't provide support for enabling only a subset of applications,
     as this would mean dependency management at this level. Dependencies are
     already handled at the Application level, so if you want fine-grained
     enabling, you shall divide the target app in multiple python packages.
-
-    This application MUST be run inside an :py:class:`~ox_orch.operations.apps.AppPlan`.
     """
 
-    __apply_spec__ = ("app_ctx",)
+    __apply_spec__ = ("apps_ctx", "django_ctx")
+    _label = "Django: enable applications"
 
-    def _apply(self, state, *_, app_ctx, **__):
-        if feature := app_ctx.app.features.get("django"):
-            app_ctx.app_plan_state.add_facts({"features": {"django": {"enabled": list(feature.apps)}}})
+    def _apply(self, state, *_, apps_ctx, django_ctx, **__):
+        django_ctx.project.enable(apps_ctx.apps)
+        django_ctx.project.sync_installed_apps()
+
+    def _rollback(self, state, *_, apps_ctx, django_ctx, **__):
+        django_ctx.project.disable(apps_ctx.apps)
+        django_ctx.project.sync_installed_apps()
 
     # Rollback is handled by upstream state restoration.
 
@@ -82,7 +87,13 @@ class DjangoSetup(Operation):
 
     """
 
+    _label = "Django: setup"
+    _description = "Initialize the Django project."
+
     def _apply(self, state, *_, django_ctx: DjangoContext, **__):
+        django_ctx.project.setup(django_ctx.settings_module, django_ctx.project_path)
+
+    def _rollback(self, state, *_, django_ctx: DjangoContext, **__):
         django_ctx.project.setup(django_ctx.settings_module, django_ctx.project_path)
 
 
@@ -91,15 +102,21 @@ class ManageCommand(ShellOperation):
     """Run a generic manage.py command."""
 
     _shell = ManageCommandShell(None)
-    label = "Manage command"
+    _label = "Django: manage command"
 
 
 @register("django:collectstatic")
 class CollectStatic(ManageCommand):
     """Run collectstatic project wide."""
 
-    label = "Collect Static Files"
-    forward: list[str] = ["collectstatic"]
+    _label = "Django: collect statics"
+    forward: list[str] = ["collectstatic", "--no-input"]
+
+
+@register("django:compilemessages")
+class CompileMessages(ManageCommand):
+    _label = "Django: compile I18n messages"
+    forward: list[str] = ["compilemessages"]
 
 
 class MigrationState(OperationState):
@@ -120,28 +137,28 @@ class Migrate(Operation):
     __state_class__ = MigrationState
     __apply_spec__ = ("django_ctx",)
 
-    def _apply(self, state, ctx, django_ctx, **inputs):
+    def _apply(self, state, *args, django_ctx, **inputs):
         project = django_ctx.project
 
-        state.backward = project.snapshot_migrations()
+        state.backward = project.get_applied_migrations()
         call_command("migrate", interactive=False, verbosity=1)
-        state.forward = project.snapshot_migrations()
+        state.forward = project.get_applied_migrations()
 
-    def _rollback(self, state, ctx, django_ctx, **inputs):
+    def _rollback(self, state, *args, django_ctx, **inputs):
         django_ctx.project.restore_migrations(state.backward)
 
 
 @register("django:reconciliation")
-class DjangoReconciliation(Plan):
+class DjangoProjectSync(Plan):
     """
-    Django reconciliation pipeline.
+    Synchronize the Django project after package update and reconciliation.
 
     It runs common post-install operations at a global level (not per-application),
     such as migration or collectstatic.
 
     Operations flowchart:
 
-        - :py:attr:`setup`: initialize Django (setup).
+        - :py:attr:`pre_operation`: initialize Django (:py:class:`DjangoSetup`).
         - :py:attr:`before_migrate` (optional): operations to run before migrations.
         - :py:attr:`migrate`: apply migrations.
         - :py:attr:`after_migrate` (optional): operations to run after migrations.
@@ -149,7 +166,7 @@ class DjangoReconciliation(Plan):
         - :py:attr:`operations` (optional): other operations to run.
     """
 
-    setup: DjangoSetup = Field(default_factory=DjangoSetup)
+    pre_operation: DjangoSetup = Field(default_factory=DjangoSetup)
     """ Operation ensuring django is setup. """
     before_migrate: list[Operation] = Field(default_factory=list)
     """ Operations to run before migrations happens. """
@@ -159,12 +176,16 @@ class DjangoReconciliation(Plan):
     """ Operation to run after Django migration. """
     collectstatic: CollectStatic | None = Field(default_factory=CollectStatic)
     """ Collect static data. """
+    compilemessages: CompileMessages | None = Field(default_factory=CompileMessages)
+    """ Compile I18n messages.. """
 
     def get_operations(self, state):
-        operations = [self.setup, *self.before_migrate, self.migrate, *self.after_migrate]
+        operations = [*self.before_migrate, self.migrate, *self.after_migrate]
 
         if self.collectstatic:
             operations.append(self.collectstatic)
+        if self.compilemessages:
+            operations.append(self.compilemessages)
         if self.operations:
             operations.extend(self.operations)
         return operations

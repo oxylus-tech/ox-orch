@@ -3,9 +3,21 @@ from typing import Generator
 from ox_orch.core.contexts import ExecutionContext
 from ox_orch.core.state import Status
 
-from .base import OPERATION_REGISTRY, STATE_REGISTRY, RunContext, OperationState, Operation, RunPython
+from .base import (
+    OPERATION_REGISTRY,
+    STATE_REGISTRY,
+    RunContext,
+    OperationState,
+    Operation,
+    RunPython,
+    DelegateOperation,
+    DelegateState,
+)
 from .plan import Plan
+
 from .apps import AppContext, AppsContext, AppPlanState, AppPlan, ReconciliationPlan, AppsPlan
+from .install import PipInstall, UvInstall, PoetryInstall, CheckPackageInstalled, CheckPackageInstalledState
+from .multiprocess import ForkOperation
 from .shell import ShellOperation
 
 
@@ -17,15 +29,25 @@ __all__ = (
     "OperationState",
     "Operation",
     "RunPython",
+    "DelegateState",
+    "DelegateOperation",
     # Plan
     "Plan",
+    # Apps
     "AppContext",
     "AppsContext",
     "AppPlan",
     "AppPlanState",
     "ReconciliationPlan",
     "AppsPlan",
+    # Install
+    "PipInstall",
+    "UvInstall",
+    "PoetryInstall",
+    "CheckPackageInstalled",
+    "CheckPackageInstalledState",
     # Others
+    "ForkOperation",
     "ShellOperation",
     # re-exports
     "Status",

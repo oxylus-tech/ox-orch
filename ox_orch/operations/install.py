@@ -14,6 +14,7 @@ To create virtual environment, you can use the ``venv:create`` operation.
 from pathlib import Path
 from typing import Iterable
 
+from pydantic import Field
 
 from ox_orch.core import ExecutionContext, register
 from ox_orch.core.state import ChangeSet
@@ -28,7 +29,7 @@ __all__ = (
     "PipInstall",
     "UvInstall",
     "PoetryInstall",
-    "CheckPackageInstalledOperation",
+    "CheckPackageInstalled",
     "CheckPackageInstalledState",
 )
 
@@ -47,9 +48,9 @@ class InstallOperation(ShellMixin, Operation):
     __state_class__ = InstallState
     __apply_spec__ = ("apps",)
 
-    update: bool = True
+    update: bool = Field(default=True, description="Update packages")
     """ Update packages. """
-    force_reinstall: bool = False
+    force_reinstall: bool = Field(default=False, description="Force package reinstallation.")
     """ Force reinstall. """
 
     def _apply(self, state, ctx, apps, **inputs):
@@ -126,6 +127,9 @@ class InstallOperation(ShellMixin, Operation):
 class PipInstall(InstallOperation):
     """Install python packages using Pip."""
 
+    _label = "Pip Install"
+    _description = "Install packages using Pip."
+
     def get_forward(self, state, shell, requirements, options=None, **_):
         return [shell.python, "-m", "pip", "install", *(options or []), *requirements]
 
@@ -137,6 +141,9 @@ class PipInstall(InstallOperation):
 class UvInstall(InstallOperation):
     """Install python packages using UV."""
 
+    _label = "UV Install"
+    _description = "Install packages using UV."
+
     def get_forward(self, state, shell, requirements, options=None, **_):
         return ["uv", "pip", "install", *(options or []), *requirements]
 
@@ -147,6 +154,9 @@ class UvInstall(InstallOperation):
 @register("install:poetry")
 class PoetryInstall(InstallOperation):
     """Install python packages using Poetry."""
+
+    _label = "Poetry Install"
+    _description = "Install packages using Poetry."
 
     def get_forward(self, state, shell, requirements, options=None, **_):
         return ["poetry", "run", "pip", "install", *(options or []), *requirements]
@@ -165,10 +175,16 @@ class CheckPackageInstalledState(OperationState):
 
 
 @register("install:check")
-class CheckPackageInstalledOperation(Operation):
+class CheckPackageInstalled(Operation):
     """
     Check if a package is installed inside the execution shell environment.
+
+    Note that it won't raise any error, but will instead update the values of
+    :py:class:`CheckPackageInstalledState`
     """
+
+    _label = "Check Install"
+    _description = "Check that provided applications' packages are installed."
 
     __apply_spec__ = ()
     __rollback_spec__ = ()

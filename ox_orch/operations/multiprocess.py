@@ -1,7 +1,10 @@
 from multiprocessing import Queue, Process
-from typing import Any, Literal
+from typing import Any, Literal, Generator
 
-from .base import Operation, OperationState
+from pydantic import Field
+
+from ox_orch.core import register
+from .base import Operation, OperationState, DelegateOperation
 
 
 __all__ = ("BaseFork", "ForkOperation", "ForkChild", "fork_entry")
@@ -22,7 +25,7 @@ class BaseFork(Operation):
     queue_max_size: int = 64
     """ Max size for a queue. """
 
-    def run(self, method, state, args, kwargs):
+    def run(self, method, state, args, kwargs) -> Generator[OperationState, None]:
         queue = Queue(maxsize=self.queue_max_size)
         try:
             process = Process(
@@ -54,7 +57,8 @@ class BaseFork(Operation):
             queue.close()
 
 
-class ForkOperation(BaseFork):
+@register("fork")
+class ForkOperation(BaseFork, DelegateOperation):
     """
     This operation allows to spawn a new child process in which its nested
     operation will be run.
@@ -96,23 +100,19 @@ class ForkOperation(BaseFork):
     ``forked=True`` allowing children to detect it.
     """
 
-    operation: Operation
-    """ The operation to execute in the child process. """
-    queue_max_size: int = 64
+    _label = "Fork"
+    _description = "Spawn a new subprocess, and run the provided operation."
+
+    queue_max_size: int = Field(
+        default=64, description="RPC queue max size. Change it only if you know what you are doing"
+    )
     """ Max size for a queue. """
 
-    def create_state(self, *args, **kwargs):
-        """Return nested operation state."""
-        return self.operation.create_state(*args, **kwargs)
+    def child_apply(self, state, *args, **kwargs):
+        yield from self.run("apply", state.child, args, kwargs)
 
-    def validate_state(self, state):
-        self.operation.validate_state(state)
-
-    def _apply(self, state, *args, **kwargs):
-        self.run("apply", state, args, kwargs)
-
-    def _rollback(self, state, *args, **kwargs):
-        self.run("rollback", state, args, kwargs)
+    def child_rollback(self, state, *args, **kwargs):
+        yield from self.run("rollback", state.child, args, kwargs)
 
 
 class ForkChild(Operation):
@@ -160,6 +160,7 @@ def fork_entry(
         func = getattr(operation, method)
         kwargs["forked"] = True
         for st in func(state, *args, **kwargs):
+            print("::::::", st)
             queue.put(("state", st))
 
     except Exception as e:

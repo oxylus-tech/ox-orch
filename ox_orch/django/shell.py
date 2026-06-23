@@ -14,7 +14,10 @@ class ManageCommandShell(Shell):
     """
 
     def run(self, command, check=False):
-        call_command(command)
+        if isinstance(command, list):
+            call_command(*command)
+        else:
+            call_command(command)
 
     def python_cmd(self, *args):
         return ["shell", "-c", " ".join(*args)]

@@ -131,7 +131,7 @@ class State(StateInfo):
         """Validate a state transition."""
         allowed = self._transitions.get(self.status, set())
         if new_status not in allowed:
-            raise ValueError(f"Can not transition {self.status} to {new_status}")
+            raise ValueError(f"[{self.operation_id}] Can not transition {self.status} to {new_status}")
 
     def start(self) -> State:
         """Mark state as started."""
@@ -219,7 +219,7 @@ class TreeState(State):
         """
         if child._parent not in (None, self) and child._root not in (None, self):
             if not force:
-                raise ValueError("Child is already in another state tree.")
+                raise ValueError(f"[{self.operation_id}] Child is already in another state tree.")
 
         self.children.append(child)
 
@@ -319,6 +319,7 @@ class ChangeSet(BaseModel):
     def validate_changes(self):
         if self.forward.keys() != self.backward.keys():
             raise ValueError(
+                f"[{self.operation_id}]"
                 "Inconsistent references between backward and forward changes."
                 "Did you forget to register some backward object?"
             )

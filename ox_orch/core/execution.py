@@ -131,6 +131,7 @@ class Executor(HookEmitter):
             run=state.run_context or spec.get_run_context(),
             shell=Shell.from_spec(spec.shell),
         )
+        inputs = {**spec.inputs, **inputs}
         operation = spec.operation
 
         self.emit("before_rollback", operation, state, ctx)
@@ -144,6 +145,10 @@ class Executor(HookEmitter):
             return state
 
         except Exception as exc:
+            import traceback
+
+            traceback.print_exc()
+
             logger.exception(
                 "Operation rollback failed",
                 extra={"operation": operation.__type_id__},
