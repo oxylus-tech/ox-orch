@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from typing import Any, Generator
 
-from pydantic import BaseModel, Field
+from pydantic import Field, field_validator
 
-from ..operations import Operation, OperationState
-from ..hooks import ExecutorHook, EXECUTOR_HOOK_REGISTRY
-from .contexts import RunContext, ExecutionContext
-from .events import HookEmitter
-from .shell import ShellSpec, Shell
-from .state import State
+from ox_orch.operations import Operation, OperationState
+from ox_orch.hooks import ExecutorHook, EXECUTOR_HOOK_REGISTRY
+from ox_orch.core import ContextInput, ContextInputs, Context, RunContext, CONTEXT_INPUT_REGISTRY, register, State
+from ox_orch.core.events import HookEmitter
+from ox_orch.core.shell import ShellSpec, Shell
 
 
 __all__ = ("ExecutionError", "ExecutionSpec", "Executor")
@@ -25,9 +25,13 @@ class ExecutionError(Exception):
     """
 
 
-class ExecutionSpec(BaseModel):
+# FIXME: later reuse the ContextInput mechanisms on the spec itself?
+@register("execution")
+class ExecutionSpec(ContextInput):
     """
-    Full description of an execution request.
+    A full specification of an execution request.
+
+    It is used by the :py:class:`Executor` to
 
     This is the single source of truth for:
     - operation
@@ -38,7 +42,7 @@ class ExecutionSpec(BaseModel):
     """
 
     operation: Operation
-    """ Operation import path or __type_id__ reference. """
+    """ Operation to run. """
     hooks: list[str] = Field(default_factory=list)
     """ Hook class paths to load dynamically. """
     trigger: str = "cli"
@@ -47,12 +51,66 @@ class ExecutionSpec(BaseModel):
     """ Run in dry mode. """
     shell: ShellSpec | None = None
     """ Shell cmd_runtime configuration. """
-    inputs: dict[str, Any] = Field(default_factory=dict)
-    """ User inputs injected into operations. """
+    inputs: dict[str, ContextInput] = Field(default_factory=dict)
+    """ User inputs arguments. """
+
+    @field_validator("inputs", mode="before")
+    @classmethod
+    def _context_inputs_cls(cls, data):
+        """
+        Ensure inputs are initialized using the right ContextInput class.
+
+        This allows convenient formatting, without having to provide the
+        polymorphic serialization format.
+        """
+        if isinstance(data, dict):
+            for key, values in data.items():
+                if isinstance(values, dict):
+                    input_cls = CONTEXT_INPUT_REGISTRY.get(key)
+                    data[key] = input_cls.model_validate(values)
+        return data
 
     def get_run_context(self) -> RunContext:
         """Return a new RunContext based on spec."""
         return RunContext(trigger=self.trigger, dry_run=self.dry_run)
+
+    def build_context(self, context_inputs=None, run_context=None, **kwargs):
+        """
+        Return a new ExecutionContext from self.
+
+        It does not create contexts for nested input contexts.
+        """
+        return ExecutionContext(
+            run=run_context or self.get_run_context(),
+            shell=Shell.from_spec(self.shell),
+            spec=self,
+        )
+
+
+@dataclass
+class ExecutionContext(Context):
+    """
+    Runtime-only orchestration data shared across all operations.
+
+    This object is not persisted nor serialized.
+    """
+
+    run: RunContext = field(default_factory=RunContext)
+    """ The current run context for operations. """
+    spec: ExecutionSpec = None
+    """ An execution specification. """
+    shell: Shell | None = field(default_factory=lambda: Shell.from_spec())
+    """ Shell backend used to run commands. """
+    data: dict[str, Any] = field(default_factory=dict)
+    """ Extra input data. """
+
+    def get(self, key: str, default=None) -> Any:
+        """Return data by key."""
+        return self.data.get(key, default)
+
+    def set(self, key: str, value: Any):
+        """Set data to the context."""
+        self.data[key] = value
 
 
 class Executor(HookEmitter):
@@ -70,7 +128,7 @@ class Executor(HookEmitter):
     hook_class = ExecutorHook
     hook_registry = EXECUTOR_HOOK_REGISTRY
 
-    def apply(self, spec: ExecutionSpec, **inputs) -> Generator[State, State]:
+    def apply(self, spec: ExecutionSpec, **contexts: dict[str, ContextInput]) -> Generator[State, State]:
         """
         Execute an operation using the provided configuration.
 
@@ -82,12 +140,11 @@ class Executor(HookEmitter):
         self.listen(spec.hooks, reset=True)
 
         run_context = spec.get_run_context()
-        ctx = ExecutionContext(
-            run=run_context,
-            shell=Shell.from_spec(spec.shell),
-            # data=spec.context
-        )
-        inputs = {**spec.inputs, **inputs}
+        ctx = spec.build_context()
+
+        contexts["exec_ctx"] = ctx
+        context_inputs = ContextInputs(inputs=spec.inputs, contexts=contexts)
+        context_inputs.build()
         operation = spec.operation
         state = operation.create_state(run_context=run_context)
 
@@ -96,7 +153,7 @@ class Executor(HookEmitter):
         # Run
         try:
             run_context.start()
-            for state in operation.apply(state, ctx, **inputs):
+            for state in operation.apply(state, **context_inputs.contexts):
                 self.emit("state_update", state=state)
                 yield state
 
@@ -112,7 +169,9 @@ class Executor(HookEmitter):
             self.emit("apply_failed", operation, state, exc)
             raise ExecutionError(str(exc)) from exc
 
-    def rollback(self, spec: ExecutionSpec, state: OperationState, **inputs) -> Generator[State, State]:
+    def rollback(
+        self, spec: ExecutionSpec, state: OperationState, **contexts: dict[str, ContextInput]
+    ) -> Generator[State, State]:
         """
         Rollback an operation.
 
@@ -127,17 +186,17 @@ class Executor(HookEmitter):
         """
         self.listen(spec.hooks, reset=True)
 
-        ctx = ExecutionContext(
-            run=state.run_context or spec.get_run_context(),
-            shell=Shell.from_spec(spec.shell),
-        )
-        inputs = {**spec.inputs, **inputs}
+        ctx = spec.build_context(run=state.run_context)
+
+        contexts["exec_ctx"] = ctx
+        context_inputs = ContextInputs(inputs=spec.inputs, contexts=contexts)
+        context_inputs.build()
         operation = spec.operation
 
         self.emit("before_rollback", operation, state, ctx)
 
         try:
-            for state in operation.rollback(state, ctx, **inputs):
+            for state in operation.rollback(state, **context_inputs.contexts):
                 self.emit("state_update", state=state)
                 yield state
 

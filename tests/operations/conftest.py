@@ -3,8 +3,7 @@ from typing import Optional
 import pytest
 
 from ox_orch.core import state
-from ox_orch.core.contexts import ExecutionContext
-from ox_orch.operations import Plan
+from ox_orch.operations import Plan, ExecutionContext
 
 from ..conftest import Operation
 

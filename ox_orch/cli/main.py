@@ -7,7 +7,7 @@ from rich import print
 from rich.align import Align
 from rich.table import Table
 
-from ox_orch.core.execution import Executor, ExecutionSpec
+from ox_orch.operations.execution import Executor, ExecutionSpec
 from ox_orch.core.files import JSONBackend
 from ox_orch.core.trace import ExecutionReplay
 from ox_orch.operations import OPERATION_REGISTRY, STATE_REGISTRY
@@ -40,7 +40,8 @@ def cli(ctx, modules):
 
 
 @cli.command("operations")
-def list_operations():
+@click.option("--details", is_flag=True, help="Show detailed informations.")
+def list_operations(details):
     """
     List registered operations.
     """
@@ -48,6 +49,9 @@ def list_operations():
 
     for type_id, cls in sorted(OPERATION_REGISTRY.items()):
         click.echo(f"{type_id:<40} {cls.__module__}.{cls.__name__}")
+
+    if details:
+        display_registry_info("Operations & Fields", OPERATION_REGISTRY)
 
 
 @cli.command("hooks")
@@ -62,7 +66,6 @@ def list_hooks():
 @cli.command("show-operations")
 def show_operations():
     """List registered operations."""
-    display_registry_info("Operations & Fields", OPERATION_REGISTRY)
 
 
 @cli.command("show-states")
@@ -73,7 +76,10 @@ def show_states():
 
 def display_registry_info(title, registry):
     table = create_table(title, columns=["Name", "Label / Default", "Description"])
-    for info in registry.get_infos(skip_no_doc=True):
+    infos = registry.get_infos(skip_no_doc=True)
+    infos.sort(key=lambda o: o.type_id)
+
+    for info in infos:
         table.add_row(f"[b]{info.type_id}[/b]", f"[b]{info.label}[/b]", f"[b]{info.description}[/b]")
 
         if info.fields:

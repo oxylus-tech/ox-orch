@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import Field
 
 
-from ox_orch.core import stores, JSONBackend, Registry, PolymorphicModel, State, FileBackend
+from ox_orch.core import stores, JSONBackend, register, Registry, PolymorphicModel, State, FileBackend, RegisteredClass
 from .app import Versioned, Application
 
 
@@ -89,8 +89,13 @@ class AppStateStoreModel(stores.FileStoreModel):
     """ Optional features extension data. """
 
 
-class AppStateStore(stores.Store):
+APP_STATE_STORE_REGISTRY = Registry()
+
+
+class AppStateStore(stores.Store, RegisteredClass):
     """Application state store."""
+
+    __registry__ = APP_STATE_STORE_REGISTRY
 
     model_class = AppState
     key = "id"
@@ -139,10 +144,12 @@ class AppStateStore(stores.Store):
                     setattr(item, field, value)
 
 
+@register("memory")
 class AppStateMemoryStore(AppStateStore, stores.MemoryStore):
     pass
 
 
+@register("file")
 class AppStateFileStore(AppStateStore, stores.FileStore):
     backend: FileBackend = JSONBackend(AppStateStoreModel)
 

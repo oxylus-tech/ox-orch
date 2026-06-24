@@ -1,6 +1,6 @@
 import pytest
 
-from ox_orch.operations import AppPlan, Operation
+from ox_orch.operations import Operation
 from ox_orch.django.operations import DjangoEnable, DjangoSetup, Migrate, DjangoProjectSync
 
 
@@ -13,11 +13,14 @@ class TestDjangoContext:
 
 class TestDjangoEnable:
     def test__apply(self, apps_ctx, django_ctx, d_app_1):
-        app_plan = AppPlan(app=d_app_1)
-        app_ctx = app_plan.get_app_context(app_plan.create_state(), apps_ctx)
         op = DjangoEnable()
-        op._apply(op.create_state(), app_ctx=app_ctx)
-        assert app_ctx.app_plan_state.facts["features"] == {"django": {"enabled": d_app_1.features["django"].apps}}
+
+        assert not django_ctx.project.get_installed_apps()
+        op._apply(op.create_state(), apps_ctx=apps_ctx, django_ctx=django_ctx)
+        assert django_ctx.project.get_installed_apps() == [
+            "django_app_2",
+            "django_app_1",
+        ]
 
 
 class TestDjangoSetup:
@@ -62,8 +65,8 @@ class TestDjangoProjectSync:
 
     def test_get_operations(self, django_ctx, operations):
         op = DjangoProjectSync(before_migrate=operations[:2], after_migrate=operations[2:4], operations=operations[4:])
+        assert isinstance(op.pre_operation, DjangoSetup)
         assert op.get_operations(op.create_state()) == [
-            op.setup,
             operations[0],
             operations[1],
             op.migrate,

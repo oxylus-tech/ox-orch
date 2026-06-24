@@ -28,6 +28,14 @@ class RegisteredClass:
     __type_id__: str | None = None
     __registry__: Registry | None = None
 
+    @classmethod
+    def from_type(cls, type_id, **kwargs):
+        return cls.get_subclass(type_id)(**kwargs)
+
+    @classmethod
+    def get_subclass(cls, type_id):
+        return cls.__registry__.get(type_id)
+
 
 class Registry:
     """Stores class mappings per domain."""

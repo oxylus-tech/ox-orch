@@ -89,7 +89,7 @@ class TestOperation:
     def test_context_passthrough_when_spec_none(self, op):
         context = {"a": 1, "b": 2, "c": 3}
 
-        resolved = op._resolve_inputs(context, None, phase="apply")
+        resolved = op._resolve_context(context, None, phase="apply")
 
         assert resolved == context
 
@@ -98,7 +98,7 @@ class TestOperation:
 
         op.__apply_spec__ = ("a", "c")
 
-        resolved = op._resolve_inputs(context, op.__apply_spec__, phase="apply")
+        resolved = op._resolve_context(context, op.__apply_spec__, phase="apply")
 
         assert resolved == {"a": 1, "c": 3}
 
@@ -108,7 +108,7 @@ class TestOperation:
         op.__apply_spec__ = ("a", "missing")
 
         with pytest.raises(KeyError):
-            op._resolve_inputs(context, op.__apply_spec__, phase="apply")
+            op._resolve_context(context, op.__apply_spec__, phase="apply")
 
     def test_context_typed_validation_success(self, op):
         context = {"registry": {"ok": True}, "apps": [1, 2, 3]}
@@ -118,7 +118,7 @@ class TestOperation:
             "apps": list,
         }
 
-        resolved = op._resolve_inputs(context, op.__apply_spec__, phase="apply")
+        resolved = op._resolve_context(context, op.__apply_spec__, phase="apply")
 
         assert resolved == context
 
@@ -130,7 +130,7 @@ class TestOperation:
         }
 
         with pytest.raises(TypeError):
-            op._resolve_inputs(context, op.__apply_spec__, phase="apply")
+            op._resolve_context(context, op.__apply_spec__, phase="apply")
 
     def test_context_rollback_spec_isolated(self, op):
         apply_context = {"registry": {"x": 1}, "apps": [1]}
@@ -139,8 +139,8 @@ class TestOperation:
         op.__apply_spec__ = ("registry", "apps")
         op.__rollback_spec__ = ("registry",)
 
-        apply_resolved = op._resolve_inputs(apply_context, op.__apply_spec__, phase="apply")
-        rollback_resolved = op._resolve_inputs(rollback_context, op.__rollback_spec__, phase="rollback")
+        apply_resolved = op._resolve_context(apply_context, op.__apply_spec__, phase="apply")
+        rollback_resolved = op._resolve_context(rollback_context, op.__rollback_spec__, phase="rollback")
 
         assert "apps" in apply_resolved
         assert "apps" not in rollback_resolved

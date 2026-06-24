@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any, ClassVar, Optional, Iterable
 from uuid import UUID, uuid4
+import traceback
 
 from pydantic import BaseModel, Field
 
@@ -84,6 +85,7 @@ class State(StateInfo):
     updated: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
     """ Last update datetime. """
 
+    _exc: Exception | None = None
     _source: Any | None = None
     """ Source path or id, set and used by the backend. """
     _transitions: ClassVar[dict[str, set[str]]] = {
@@ -120,18 +122,24 @@ class State(StateInfo):
         :param error: set error if provided.
         :returns: self
         """
-        self.validate_transition(status)
+        # We put it before to ease inspection.
+        exc = isinstance(error, Exception) and error or None
+        self.validate_transition(status, exc=exc)
         self.status = status
         if error is not None:
             self.error = str(error)
         self.updated = datetime.now(timezone.utc)
         return self
 
-    def validate_transition(self, new_status: str):
+    def validate_transition(self, new_status: str, exc: Exception | None = None):
         """Validate a state transition."""
         allowed = self._transitions.get(self.status, set())
         if new_status not in allowed:
-            raise ValueError(f"[{self.operation_id}] Can not transition {self.status} to {new_status}")
+            message = f"[{type(self).__name__}] Can not transition {self.status} to {new_status}"
+
+            if exc:
+                message += f"\nThis error happened while handling another one: {exc}\n\n" + traceback.format_exc()
+            raise ValueError(message)
 
     def start(self) -> State:
         """Mark state as started."""

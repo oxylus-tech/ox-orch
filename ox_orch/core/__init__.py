@@ -1,4 +1,4 @@
-from .contexts import ExecutionContext, RunContext
+from .contexts import CONTEXT_INPUT_REGISTRY, ContextInput, ContextInputs, Context, RunContext
 from .files import FileBackend, YAMLBackend, JSONBackend, JSONLBackend
 from .events import Hook, HookEmitter
 from .registry import Registry, RegisteredClass, register
@@ -9,7 +9,10 @@ from .trace import TraceEvent, ReplayState, ExecutionReplay
 
 
 __all__ = (
-    "ExecutionContext",
+    "ContextInput",
+    "ContextInputs",
+    "CONTEXT_INPUT_REGISTRY",
+    "Context",
     "RunContext",
     "FileBackend",
     "YAMLBackend",

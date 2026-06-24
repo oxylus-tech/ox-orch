@@ -4,7 +4,7 @@ from pathlib import Path
 from django.core.management import call_command
 from pydantic import Field
 
-from ox_orch.core import register
+from ox_orch.core import register, ContextInput
 from ox_orch.operations import Operation, OperationState, Plan, ShellOperation
 
 from .project import DjangoProject
@@ -13,6 +13,7 @@ from .shell import ManageCommandShell
 
 __all__ = (
     "DjangoContext",
+    "DjangoContextInput",
     "DjangoEnable",
     "DjangoSetup",
     "ManageCommand",
@@ -44,6 +45,17 @@ class DjangoContext:
         """
         kwargs["project"] = DjangoProject(store=apps_ctx.store, state_store=apps_ctx.state_store)
         return cls(**kwargs)
+
+
+class DjangoContextInput(ContextInput):
+    project_path: Path
+    settings_module: str
+
+    def build_context(self, context_inputs, **kwargs) -> DjangoContext:
+        apps_ctx = context_inputs.resolve("apps_ctx")
+        return DjangoContext.from_apps_ctx(
+            apps_ctx, settings_module=self.settings_module, project_path=self.project_path
+        )
 
 
 @register("django:enable")

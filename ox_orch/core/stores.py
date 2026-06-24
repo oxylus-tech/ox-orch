@@ -108,7 +108,7 @@ class Store(ABC, Generic[K, V]):
         missing = [] if exc else None
 
         for key in keys:
-            item = self.get(key, False)
+            item = self.get(key, exc=False)
             match item:
                 case BaseModel():
                     items.append(item)
@@ -183,6 +183,22 @@ class Store(ABC, Generic[K, V]):
 
     def get_key(self, item) -> K:
         return getattr(item, self.key)
+
+    def load(self) -> Any:
+        """
+        Load to the store to permanent memory.
+
+        Default implementation does nothing.
+        """
+        pass
+
+    def save(self):
+        """
+        Save to the store to permanent memory.
+
+        Default implementation does nothing.
+        """
+        pass
 
 
 class MemoryStore(Store[K, V]):

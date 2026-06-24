@@ -108,6 +108,11 @@ class ForkOperation(BaseFork, DelegateOperation):
     )
     """ Max size for a queue. """
 
+    def create_state(self, **kwargs):
+        if "child" not in kwargs:
+            kwargs["child"] = self.operation.create_state()
+        return super().create_state(**kwargs)
+
     def child_apply(self, state, *args, **kwargs):
         yield from self.run("apply", state.child, args, kwargs)
 
@@ -160,7 +165,6 @@ def fork_entry(
         func = getattr(operation, method)
         kwargs["forked"] = True
         for st in func(state, *args, **kwargs):
-            print("::::::", st)
             queue.put(("state", st))
 
     except Exception as e:

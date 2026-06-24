@@ -110,7 +110,6 @@ class TestFileStoreModel:
 
 
 class TestFileStore:
-
     def test_save_and_load(self, file_store, item_a):
         file_store.commit([item_a])
         file_store.save()
@@ -122,11 +121,11 @@ class TestFileStore:
             backend=file_store.backend,
         )
 
-        loaded.load()
+        data = loaded.load()
 
+        assert isinstance(data, FileStoreModel)
         assert "a" in loaded.data
-        assert loaded.data["a"].name == "a"
-        assert loaded.data["a"].value == 1
+        assert loaded.data["a"] == {"name": "a", "value": 1}
 
     def test_load_missing_file(self, file_store):
         file_store.load()

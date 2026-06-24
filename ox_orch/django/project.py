@@ -8,6 +8,9 @@ from ox_orch.core import register
 from ox_orch.apps import Application, AppFeature, AppStore, AppStateFeature, AppStateStore, AppStateStoreFeature
 
 
+__all__ = ("DjangoAppFeature", "DjangoStateFeature", "DjangoStateStoreFeature", "DjangoProject")
+
+
 @register("django")
 class DjangoAppFeature(AppFeature):
     """
@@ -149,8 +152,7 @@ class DjangoProject:
         feature = self.get_feature()
         feature.installed_apps = installed_apps
 
-        if hasattr(self.state_store, "save"):
-            self.state_store.save()
+        self.state_store.save()
 
     # ---- Migrations
     def get_applied_migrations(self) -> dict[str, list[str]]:

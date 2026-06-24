@@ -10,6 +10,18 @@ from .base import Operation, OperationState
 __all__ = ("ShellMixin", "ShellState", "ShellOperation")
 
 
+@register("shell")
+class ShellState(OperationState):
+    """
+    State for subprocess operations.
+
+    Stores executed commands for auditability.
+    """
+
+    forward_cmd: list[str] | None = Field(default=None, description="Applied command")
+    backward_cmd: list[str] | None = Field(default=None, description="Rollback command")
+
+
 class ShellMixin:
     """
     Provides safe subprocess execution primitives for operations.
@@ -19,6 +31,8 @@ class ShellMixin:
     - executing backward commands
     - capturing stdout/stderr if configured
     """
+
+    __state_class__ = ShellState
 
     _shell: ClassVar[Shell | None] = None
     """ Overrides shell provided by execution context. """
@@ -41,14 +55,14 @@ class ShellMixin:
         """
         raise NotImplementedError
 
-    def _apply(self, state, ctx, **context):
+    def _apply(self, state, exec_ctx, **context):
         """Run forward command, as returned by :py:meth:`get_forward`."""
         cmd = self.get_forward(state, **context)
         if cmd:
             self.log("Run: {' '.join(cmd)}")
 
-            if not ctx.run.dry_run:
-                shell = self._shell or ctx.shell
+            if not exec_ctx.run.dry_run:
+                shell = self._shell or exec_ctx.shell
                 shell.run(cmd)
         else:
             self.log("No command to apply")
@@ -56,32 +70,20 @@ class ShellMixin:
         if isinstance(state, ShellState):
             state.forward_cmd = cmd
 
-    def _rollback(self, state, ctx, **context):
+    def _rollback(self, state, exec_ctx, **context):
         """Run forward command, as returned by :py:meth:`get_backward`."""
         cmd = self.get_backward(state, **context)
 
         if cmd:
             self.log("Run: {' '.join(cmd)}")
-            if not ctx.run.dry_run:
-                shell = self._shell or ctx.shell
+            if not exec_ctx.run.dry_run:
+                shell = self._shell or exec_ctx.shell
                 shell.run(cmd)
         else:
             self.log("No command to apply")
 
         if isinstance(state, ShellState):
             state.backward_cmd = cmd
-
-
-@register("shell")
-class ShellState(OperationState):
-    """
-    State for subprocess operations.
-
-    Stores executed commands for auditability.
-    """
-
-    forward_cmd: list[str] | None = None
-    backward_cmd: list[str] | None = None
 
 
 @register("shell")
@@ -94,7 +96,6 @@ class ShellOperation(ShellMixin, Operation):
     - get_backward()
     """
 
-    __state_class__ = ShellState
     _label = "Shell"
     _description = "Run commands for the provided shell."
 

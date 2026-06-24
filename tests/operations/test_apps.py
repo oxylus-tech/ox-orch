@@ -1,9 +1,18 @@
 import pytest
 
 from ox_orch.core import Status, register
+from ox_orch.apps import AppFileStore, AppStateMemoryStore
 from ox_orch.utils import consume_iter
 from ox_orch.core.shell import EchoShell
-from ox_orch.operations import RunPython, AppsContext, AppsPlan, AppPlan, ReconciliationPlan
+from ox_orch.operations import (
+    RunPython,
+    AppsContext,
+    AppContextInput,
+    AppsContextInput,
+    AppsPlan,
+    AppPlan,
+    ReconciliationPlan,
+)
 from ox_orch.apps import AppState, AppStateFeature
 
 from ..conftest import package_versions, package_next_versions, FakeInstall
@@ -72,6 +81,31 @@ def apps_plan_state(apps_plan):
     return apps_plan.create_state()
 
 
+class TestAppContextInput:
+    def test_build_context(self, context_inputs, apps_ctx, app_dep):
+        input = AppContextInput(app=app_dep.id)
+        context_inputs.contexts["apps_ctx"] = apps_ctx
+        ctx = input.build_context(context_inputs)
+
+        assert ctx.app == app_dep
+        assert ctx.app_state.id == app_dep.id
+
+
+class TestAppsContextInput:
+    def test_build_context(self, context_inputs, app_file_store, app_dep, app_dep_1):
+        input = AppsContextInput(
+            store_backend="file",
+            store_args={"path": app_file_store.path},
+            store_path=app_file_store,
+            apps=[app_dep.id, app_dep_1.id],
+        )
+        ctx = input.build_context(context_inputs)
+
+        assert isinstance(ctx.store, AppFileStore)
+        assert isinstance(ctx.state_store, AppStateMemoryStore)
+        assert ctx.apps == [app_dep, app_dep_1]
+
+
 class TestAppPlanState:
     def test_add_facts(self, app_plan):
         state = app_plan.create_state()
@@ -88,11 +122,10 @@ class TestAppPlan:
         state = app_plan.create_state()
         assert state.app == app_meta
         assert state.version == package_versions[app_meta.package]
-        assert state.target_version == app_meta.version
 
-    def test_get_inputs(self, app_plan, app_meta, apps_ctx):
+    def test_get_context(self, app_plan, app_meta, apps_ctx):
         state = app_plan.create_state()
-        context = app_plan.get_inputs(state, apps_ctx)
+        context = app_plan.get_context(state, apps_ctx)
         assert context["app_ctx"].app == app_plan.app
         assert isinstance(context["app_ctx"].app_state, AppState)
         assert context["app_ctx"].app_plan == app_plan

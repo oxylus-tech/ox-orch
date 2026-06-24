@@ -36,7 +36,7 @@ class TestPlan:
         states, exc_ = apply(plan, plan_state, exc=exc)
 
         assert exc_ is exc
-        assert plan_state.status == Status.ROLLED_BACK
+        assert plan_state.status == Status.FAILED
         assert_states(
             states,
             [
@@ -44,10 +44,6 @@ class TestPlan:
                 (op.id, Status.RUNNING),
                 (op.id, Status.FAILED, exc),
                 (plan.id, Status.FAILED, exc),
-                (plan.id, Status.ROLLING_BACK),
-                (op.id, Status.ROLLING_BACK),
-                (op.id, Status.ROLLED_BACK),
-                (plan.id, Status.ROLLED_BACK),
             ],
         )
 

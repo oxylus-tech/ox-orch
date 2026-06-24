@@ -1,8 +1,10 @@
 import pytest
 
-from ox_orch.core.execution import Executor, ExecutionError, ExecutionSpec
 from ox_orch.core.state import Status
+from ox_orch.operations.execution import Executor, ExecutionError, ExecutionSpec
 from ox_orch.operations import Operation
+
+from ..conftest import ContextStrInput
 
 
 class FakeOperation(Operation):
@@ -17,13 +19,13 @@ class FakeOperation(Operation):
     fail_apply: bool = False
     fail_rollback: bool = False
 
-    def _apply(self, state, ctx, **context):
+    def _apply(self, state, exec_ctx, **context):
         if self.fail_apply:
             raise RuntimeError("apply failed")
         self.applied = True
         yield state
 
-    def _rollback(self, state, ctx, **context):
+    def _rollback(self, state, exec_ctx, **context):
         if self.fail_rollback:
             raise RuntimeError("rollback failed")
         self.rolled_back = True
@@ -41,6 +43,11 @@ def state(operation):
 
 
 @pytest.fixture
+def a_input():
+    return ContextStrInput(value="a")
+
+
+@pytest.fixture
 def executor():
     return Executor()
 
@@ -55,19 +62,16 @@ class TestExecutor:
         assert operation.applied is True
         assert result.run_context is not None
 
-    def test_apply_with_inputs(self, executor, operation, state):
-        def _apply(self, state, ctx=None, value=None, **_):
-            state._value = value
+    def test_apply_with_inputs(self, executor, operation, state, a_input):
+        def _apply(self, state, ctx=None, test_a_input=None, **_):
+            state._value = test_a_input.value
             yield state
 
         operation._apply = _apply.__get__(operation, FakeOperation)
-        spec = ExecutionSpec(
-            operation=operation,
-            inputs={"value": 42},
-        )
+        spec = ExecutionSpec(operation=operation, inputs={"test_a_input": a_input})
         state = executor.apply_sync(spec)
 
-        assert state._value == 42
+        assert state._value == "a"
 
     def test_apply_failure(self, executor, operation, state):
         operation.fail_apply = True
@@ -119,7 +123,7 @@ class TestExecutionSpec:
         assert spec.dry_run is False
         assert isinstance(spec.inputs, dict)
 
-    def test_spec_context_storage(self, operation):
-        spec = ExecutionSpec(operation=operation, inputs={"a": 1})
+    def test_spec__context_inputs_from_cls(self, operation, a_input):
+        spec = ExecutionSpec(operation=operation, inputs={"test_str_input": {"value": "a-a"}})
 
-        assert spec.inputs["a"] == 1
+        assert spec.inputs["test_str_input"] == ContextStrInput(value="a-a")

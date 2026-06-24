@@ -1,6 +1,6 @@
 import pytest
 
-from ox_orch.core.execution import ExecutionSpec, Executor
+from ox_orch.operations.execution import ExecutionSpec, Executor
 from ox_orch.operations import AppsPlan, UvInstall, ForkOperation
 from ox_orch.django import DjangoProjectSync, DjangoEnable
 
@@ -13,12 +13,11 @@ def executor():
 
 
 @pytest.fixture
-def make_spec(shell, apps_ctx, django_ctx):
+def make_spec(shell):
     def _make(operation):
         return ExecutionSpec(
             operation=operation,
             shell=shell.spec,
-            inputs={"apps_ctx": apps_ctx, "django_ctx": django_ctx},
         )
 
     return _make
@@ -31,15 +30,15 @@ def d_app_plan():
 
 class TestDjango:
     def test_apply_base_plan(
-        self, executor, d_app_plan, django_project, setup_project, make_spec, apps_ctx, app_store, db_path
+        self, executor, d_app_plan, django_project, django_ctx, setup_project, make_spec, apps_ctx, app_store, db_path
     ):
         db_path.unlink(missing_ok=True)
 
+        context = {"apps_ctx": apps_ctx, "django_ctx": django_ctx}
         django_project.disable(apps_ctx.apps)
 
         spec = make_spec(d_app_plan)
-        state = executor.apply_sync(spec)
-        breakpoint()
+        state = executor.apply_sync(spec, **context)
 
         django_project.state_store.load()
         enabled = django_project.get_installed_apps()
@@ -50,7 +49,7 @@ class TestDjango:
         assert "django_app_1" in migrations
         assert "django_app_2" in migrations
 
-        executor.rollback_sync(spec, state)
+        executor.rollback_sync(spec, state, **context)
 
         django_project.state_store.load()
         assert not django_project.get_installed_apps()

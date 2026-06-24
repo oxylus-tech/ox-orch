@@ -31,6 +31,9 @@ class Plan(Operation):
     generated dynamically by overrding :py:meth:`get_operations`.
     """
 
+    __state_class__ = PlanState
+    __full_context__ = True
+
     _label = "Plan"
     _description = (
         "Run multiple operations sequencially.\n"
@@ -59,8 +62,6 @@ class Plan(Operation):
         list[Operation], Field(default_factory=list, subclass_ok=True, description="The nested operations to run")
     ]
     """ The operations to run. """
-    __state_class__ = PlanState
-    __full_inputs__ = True
 
     def create_state(self, **kwargs) -> OperationState:
         kwargs["children"] = []
@@ -70,12 +71,12 @@ class Plan(Operation):
     def validate_operations(cls, v):
         return [Operation.model_validate(op) if isinstance(op, dict) and "__type__" in op else op for op in v]
 
-    def _apply(self, state, ctx, **inputs) -> Generator[OperationState]:
+    def _apply(self, state, exec_ctx, **context) -> Generator[OperationState]:
         """
         Execute nested operations.
 
         On failure, it will rollback the whole current operation before raising
-        the exception again. The ``**inputs`` arguments will be passed down to
+        the exception again. The ``**context`` arguments will be passed down to
         the :py:meth:`rollback` method.
 
         .. note::
@@ -95,31 +96,22 @@ class Plan(Operation):
         for idx in range(start_idx, len(operations)):
             op = operations[idx]
 
-            try:
-                if len(state.children) > idx:
-                    op_state = state.children[idx]
+            if len(state.children) > idx:
+                op_state = state.children[idx]
 
-                    if op_state.operation_id != type(op).__type_id__:
-                        raise ValueError(
-                            "State operation id does not match to current operation's one: "
-                            f"{op_state.operation_id} != {type(op).__type_id__}"
-                        )
+                if op_state.operation_id != type(op).__type_id__:
+                    raise ValueError(
+                        "State operation id does not match to current operation's one: "
+                        f"{op_state.operation_id} != {type(op).__type_id__}"
+                    )
 
-                else:
-                    op_state = op.create_state()
-                    state.children.append(op_state)
+            else:
+                op_state = op.create_state()
+                state.children.append(op_state)
 
-                yield from op.apply(op_state, ctx, **inputs)
-            except Exception as exc:
-                import traceback
+            yield from op.apply(op_state, exec_ctx, **context)
 
-                traceback.print_exc()
-                yield state.fail(exc)
-                inputs["op_idx"] = idx
-                yield from self.rollback(state, ctx, **inputs)
-                raise
-
-    def _rollback(self, state, ctx, **inputs) -> Generator[OperationState]:
+    def _rollback(self, state, exec_ctx, **context) -> Generator[OperationState]:
         """
         Execute rollbacks for applied operations (in reverse order).
 
@@ -149,11 +141,11 @@ class Plan(Operation):
 
         for op, op_state in zip(reversed(operations), reversed(states)):
             if op_state.is_any(Status.COMPLETED, Status.RUNNING, Status.FAILED):
-                yield from op.rollback(op_state, ctx, **inputs)
+                yield from op.rollback(op_state, exec_ctx, **context)
 
-    def get_inputs(self, state, **inputs):
-        inputs["plan"] = self
-        return super().get_inputs(state, **inputs)
+    def get_context(self, state, **context):
+        context["plan"] = self
+        return super().get_context(state, **context)
 
     def get_operations(self, state: OperationState) -> list[Operation]:
         """

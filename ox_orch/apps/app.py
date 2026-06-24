@@ -6,7 +6,7 @@ from typing import Iterable, TypeAlias
 
 from pydantic import Field, BaseModel, field_validator, model_validator
 
-from ox_orch.core import stores, Registry, PolymorphicModel
+from ox_orch.core import stores, register, FileBackend, JSONBackend, Registry, RegisteredClass, PolymorphicModel
 from ox_orch.utils import map_or_return
 
 
@@ -21,6 +21,10 @@ __all__ = (
     "AppRelease",
     "Application",
     "resolve_install_order",
+    "APP_STORE_REGISTRY",
+    "AppStore",
+    "AppMemoryStore",
+    "AppFileStore",
 )
 
 
@@ -261,10 +265,15 @@ class Application(AppRelease):
         return AppState(id=self.id, version=self.version, package=self.package, **kwargs)
 
 
-class AppStore(stores.Store):
+APP_STORE_REGISTRY = Registry()
+
+
+class AppStore(stores.Store, RegisteredClass):
     """
     This registry is used to get and resolve application metadata.
     """
+
+    __registry__ = APP_STORE_REGISTRY
 
     model_class = Application
     key = "id"
@@ -323,6 +332,13 @@ class AppStore(stores.Store):
         return resolve_install_order(releases.values())
 
 
+class AppStoreModel(stores.FileStoreModel):
+    """Provide features to the AppStateStore."""
+
+    data: dict[str, Application] = Field(default_factory=dict)
+
+
+@register("memory")
 class AppMemoryStore(AppStore, stores.MemoryStore):
     """
     App registry keeping the store in memory.
@@ -337,6 +353,7 @@ class AppMemoryStore(AppStore, stores.MemoryStore):
     pass
 
 
+@register("file")
 class AppFileStore(AppMemoryStore, stores.FileStore):
     """
     Load and store the whole registry in a single file.
@@ -344,7 +361,7 @@ class AppFileStore(AppMemoryStore, stores.FileStore):
     You should call :py:meth:`from_yaml` or :py:meth:`from_json`.
     """
 
-    pass
+    backend: FileBackend = JSONBackend(AppStoreModel)
 
 
 def resolve_install_order(releases: list[AppRelease]) -> list[AppRelease]:

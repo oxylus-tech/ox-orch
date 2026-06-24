@@ -71,10 +71,6 @@ class PolymorphicModel(RegisteredClass, BaseModel):
     def from_type(cls, type_id, **values):
         return cls.get_subclass(type_id).model_validate(values)
 
-    @classmethod
-    def get_subclass(cls, type_id):
-        return cls.__registry__.get(type_id)
-
     @model_serializer(mode="wrap")
     def serialize(self, serializer, info) -> dict[str, Any]:
         data = serializer(self)
@@ -105,11 +101,12 @@ class PolymorphicModel(RegisteredClass, BaseModel):
     @classmethod
     def model_validate(cls, obj, **kwargs):
         if isinstance(obj, dict):
-            if obj.get("__type_id__"):
+            if type_id := obj.get("__type_id__"):
                 raw = obj.get("config")
+                real_cls = cls.get_subclass(type_id)
                 if isinstance(raw, BaseModel):
                     raw = raw.model_dump()
-                return hydrate(cls, raw)
+                return hydrate(real_cls, raw)
         return super().model_validate(obj, **kwargs)
 
     @classmethod

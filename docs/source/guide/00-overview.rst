@@ -29,7 +29,7 @@ Once the workflow is defined, you will execute it like this:
 
 .. code-block:: python
 
-    from ox_orch.core.execution import Executor, ExecutionSpec
+    from ox_orch.operations.execution import Executor, ExecutionSpec
     from ox_orch.apps import Application, AppsContext, AppMemoryStore, AppStateMemoryStore
     from ox_orch.hooks import LoggingHook
 
@@ -172,7 +172,7 @@ Executor
 
 The executor is the main utility class that you'll need to run operations. It handles:
 
-- Load a provided configuration (:py:class:`~ox_orch.core.execution.ExecutionSpec`);
+- Load a provided configuration (:py:class:`~ox_orch.operations.execution.ExecutionSpec`);
 - Initialize the context used for running operations;
 - Run the operation(s), calling hooks at different stages;
 - Create and manage operation states;

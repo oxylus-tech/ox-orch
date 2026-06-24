@@ -1,14 +1,14 @@
+from dataclasses import dataclass
 from pathlib import Path
 from importlib import metadata
 
 import pytest
 from pydantic import PrivateAttr, BaseModel
 
-from ox_orch.core import files
-from ox_orch.core import ExecutionContext
+from ox_orch.core import files, ContextInput, ContextInputs, Context, register
 from ox_orch.core.shell import EchoShell, ShellSpec
-from ox_orch.apps import Application, AppMemoryStore, AppStateMemoryStore
-from ox_orch.operations import Operation, OperationState
+from ox_orch.apps import Application, AppMemoryStore, AppFileStore, AppStateMemoryStore
+from ox_orch.operations import Operation, OperationState, ExecutionContext
 from ox_orch.operations.install import InstallOperation
 
 
@@ -28,12 +28,12 @@ class Operation(Operation):
     rollbacked: bool = False
     __type_id__ = "op:test:operation"
 
-    def _apply(self, state, ctx, exc=None, **kw):
+    def _apply(self, state, exc=None, **kw):
         if exc:
             raise exc
         self.applied = True
 
-    def _rollback(self, state, ctx, rexc=None, **kw):
+    def _rollback(self, state, rexc=None, **kw):
         if rexc:
             raise rexc
         self.rollbacked = True
@@ -43,6 +43,8 @@ class FakeInstall(InstallOperation):
     __type_id__ = "op:test:install"
 
     _called = PrivateAttr()
+    __apply_spec__ = None
+    __rollback_spec__ = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -70,6 +72,27 @@ class FakeInstall(InstallOperation):
 class DummyModel(BaseModel):
     name: str
     value: int = 0
+
+
+@register("test_str_input")
+class ContextStrInput(ContextInput):
+    value: str
+
+    def build_context(self, *_, **__):
+        return DummyContext(value=self.value)
+
+
+@register("test_int_input")
+class ContextIntInput(ContextInput):
+    value: int | None = None
+
+    def build_context(self, *_, **__):
+        return DummyContext(value=str(self.value))
+
+
+@dataclass
+class DummyContext(Context):
+    value: str = "a"
 
 
 @pytest.fixture
@@ -164,6 +187,13 @@ def app_store(app_metas):
 
 
 @pytest.fixture
+def app_file_store(tmp_path, app_metas):
+    store = AppFileStore(tmp_path / "apps.json", items=app_metas)
+    store.save()
+    return store
+
+
+@pytest.fixture
 def app_state_store(app_dep_1):
     return AppStateMemoryStore(items=[app_dep_1.create_state()])
 
@@ -171,6 +201,11 @@ def app_state_store(app_dep_1):
 @pytest.fixture
 def exec_ctx():
     return ExecutionContext()
+
+
+@pytest.fixture
+def context_inputs():
+    return ContextInputs()
 
 
 @pytest.fixture

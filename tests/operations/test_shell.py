@@ -23,7 +23,7 @@ class DummyOp(ShellOperation):
 @pytest.fixture
 def mock_run(monkeypatch):
     mock_run = MagicMock()
-    monkeypatch.setattr("shell.run", mock_run)
+    # monkeypatch.setattr("ox_orch.core.shell.run", mock_run)
     return mock_run
 
 

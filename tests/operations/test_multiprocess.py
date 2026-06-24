@@ -130,9 +130,7 @@ class TestForkOperation:
         state = fork.create_state()
         states, exc = apply(fork, state)
 
-        assert states[0]._operation == fork.operation
-
+        assert states[0].child.operation_id == fork.operation.id
         states, exc = rollback(fork, state)
-
-        assert states[0]._operation == fork.operation
+        assert states[0].child.operation_id == fork.operation.id
         assert states[-1].status == Status.ROLLED_BACK

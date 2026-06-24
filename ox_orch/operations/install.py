@@ -16,9 +16,7 @@ from typing import Iterable
 
 from pydantic import Field
 
-from ox_orch.core import ExecutionContext, register
-from ox_orch.core.state import ChangeSet
-
+from ox_orch.core import ChangeSet, register
 from .base import OperationState, Operation
 from .shell import ShellMixin
 
@@ -42,18 +40,23 @@ class InstallState(ChangeSet, OperationState):
 class InstallOperation(ShellMixin, Operation):
     """Install packages using pip.
 
-    There are two context values required
+    There are two context values required, note however that ``apps`` is a
+    simple list of Application classes.
     """
 
     __state_class__ = InstallState
-    __apply_spec__ = ("apps",)
+    __apply_spec__ = (
+        "exec_ctx",
+        "apps",
+    )
+    __rollback_spec__ = ("exec_ctx",)
 
     update: bool = Field(default=True, description="Update packages")
     """ Update packages. """
     force_reinstall: bool = Field(default=False, description="Force package reinstallation.")
     """ Force reinstall. """
 
-    def _apply(self, state, ctx, apps, **inputs):
+    def _apply(self, state, exec_ctx, apps, **inputs):
         if not apps:
             return
 
@@ -64,24 +67,24 @@ class InstallOperation(ShellMixin, Operation):
         apps_req = self._snapshot(apps, True)
         self.log("Install:\n" + "\n".join(f"- {v['package']} @ {v['version']}" for v in state.backward.values()))
 
-        if ctx.run.dry_run:
+        if exec_ctx.run.dry_run:
             state.forward = apps_req
         else:
-            self.install(state, ctx.shell, apps_req.values(), options=options)
+            self.install(state, exec_ctx.shell, apps_req.values(), options=options)
             state.forward = self._snapshot(apps)
 
-    def _rollback(self, state, ctx, **inputs):
+    def _rollback(self, state, exec_ctx, **inputs):
         downgrade = [values for values in state.backward.values() if values.get("version") is not None]
         self.log("Downgrade to:\n" + "\n".join(f"- {vals['package']} @ {vals['version']}" for vals in downgrade))
 
-        if not ctx.run.dry_run and downgrade:
-            self.install(state, ctx.shell, downgrade)
+        if not exec_ctx.run.dry_run and downgrade:
+            self.install(state, exec_ctx.shell, downgrade)
 
         uninstall = [values["package"] for values in state.backward.values() if values.get("version") is None]
         self.log("Remove:\n" + "\n".join(f"- {key}" for key in uninstall))
 
-        if not ctx.run.dry_run and uninstall:
-            self.uninstall(state, ctx.shell, uninstall)
+        if not exec_ctx.run.dry_run and uninstall:
+            self.uninstall(state, exec_ctx.shell, uninstall)
 
     def get_install_options(self):
         """Build CLI option for installation (forward only)."""
@@ -191,12 +194,12 @@ class CheckPackageInstalled(Operation):
 
     packages: list[str]
 
-    def _apply(self, state: CheckPackageInstalledState, ctx: ExecutionContext, **_):
+    def _apply(self, state: CheckPackageInstalledState, exec_ctx, **_):
         """
         Uses the shell runtime (venv-aware) to check installation.
         """
         for package in self.packages:
-            result = ctx.shell.run(
+            result = exec_ctx.shell.run(
                 ["python", "-m", "pip", "show", package],
             )
             if result.returncode == 0:

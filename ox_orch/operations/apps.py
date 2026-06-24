@@ -6,7 +6,7 @@ from typing import Any, Iterable
 from pydantic import Field, field_validator
 
 from ox_orch.apps import Application, AppState, AppStore, AppStateStore, AppStateMemoryStore, InstallOrigin
-from ox_orch.core import register, Status, ChangeSet
+from ox_orch.core import register, Status, ChangeSet, ContextInput
 from .base import Operation
 from .install import InstallOperation
 from .plan import Plan, PlanState
@@ -24,8 +24,8 @@ class AppContext:
 
     app: Application
     app_state: AppState
-    app_plan: AppPlan
-    app_plan_state: AppPlanState
+    app_plan: AppPlan | None = None
+    app_plan_state: AppPlanState | None = None
 
 
 @dataclass
@@ -45,17 +45,53 @@ class AppsContext:
         return cls(apps=apps, store=store, **kwargs)
 
 
+@register("app_ctx")
+class AppContextInput(ContextInput):
+    app: str = Field(description="Application id retrieved from app store")
+
+    def build_context(self, context_inputs, **kwargs) -> AppContext:
+        apps_ctx = context_inputs.resolve("apps_ctx")
+        app = apps_ctx.store.get(self.app)
+        state = apps_ctx.state_store.get(self.app) or app.create_state()
+        return AppContext(app=app, app_state=state)
+
+
+@register("apps_ctx")
+class AppsContextInput(ContextInput):
+    store_backend: str = Field(default="memory", description="Application store backend, as memory, or file.")
+    store_args: dict[str, Any] = Field(default_factory=dict, description="Application store initial arguments.")
+    state_store_backend: str = Field(
+        default="memory", description="Application state store backend, as memory, or file."
+    )
+    state_store_args: dict[str, Any] = Field(
+        default_factory=dict, description="Application state store initial arguments."
+    )
+    apps: list[str] = Field(default_factory=list, description="List of application ids.")
+
+    def build_context(self, context_inputs, **kwargs) -> AppsContext:
+        store = AppStore.from_type(self.store_backend, **self.store_args)
+        state_store = AppStateStore.from_type(self.state_store_backend, **self.state_store_args)
+
+        store.load()
+        state_store.load()
+        return AppsContext(
+            apps=store.get_all(self.apps),
+            store=store,
+            state_store=state_store,
+        )
+
+
 @register("app")
 class AppPlanState(PlanState):
     """State for the AppPlan operation."""
 
-    app: Application
+    _label = "App Plan"
+
+    app: Application = Field(description="The Application data")
     """ Application metadata used for install. """
-    target_version: str
-    """ Version expected by registry update. """
-    version: str | None = None
+    version: str | None = Field(description="Current installed version of the application package.")
     """ Version detected in environment before execution. """
-    facts: dict[str, Any] = Field(default_factory=dict)
+    facts: dict[str, Any] = Field(default_factory=dict, description="Application state updates.")
     """
     Application's state changes that will be committed to apps registry
     once whole installation is done.
@@ -95,9 +131,9 @@ class AppPlan(Plan):
             **kwargs,
         )
 
-    def get_inputs(self, state, apps_ctx, **inputs):
-        inputs["app_ctx"] = self.get_app_context(state, apps_ctx)
-        return super().get_inputs(state, apps_ctx=apps_ctx, **inputs)
+    def get_context(self, state, apps_ctx, **context):
+        context["app_ctx"] = self.get_app_context(state, apps_ctx)
+        return super().get_context(state, apps_ctx=apps_ctx, **context)
 
     def get_app_context(self, state: AppPlanState, apps_ctx):
         return AppContext(
@@ -112,6 +148,7 @@ class AppPlan(Plan):
 class ReconciliationState(ChangeSet, PlanState):
     """State for the reconciliation of applications."""
 
+    _label = "Reconciliation Plan"
     pass
 
 
@@ -130,7 +167,7 @@ class ReconciliationPlan(Plan):
 
     __state_class__ = ReconciliationState
     __apply_spec__ = ("apps_ctx",)
-    __full_inputs__ = True
+    __full_context__ = True
     _label = "Reconciliation Plan"
     _description = (
         "Detect updates based on provided applications and their dependencies, "
@@ -140,7 +177,7 @@ class ReconciliationPlan(Plan):
 
     app_plan: AppPlan = Field(description="The application plan to apply.")
 
-    def _apply(self, state, ctx, apps_ctx: AppsContext, **inputs):
+    def _apply(self, state, exec_ctx, apps_ctx: AppsContext, **context):
         apps = apps_ctx.apps
         if not apps:
             return
@@ -164,7 +201,7 @@ class ReconciliationPlan(Plan):
             op_state = op.create_state()
             state.children.append(op_state)
 
-            yield from op.apply(op_state, ctx, app=app, apps_ctx=apps_ctx, **inputs)
+            yield from op.apply(op_state, exec_ctx, app=app, apps_ctx=apps_ctx, **context)
 
         # 3. Collect registry update
         for op_state in state.children:
@@ -177,7 +214,7 @@ class ReconciliationPlan(Plan):
             state.add_changes(op_state.app.id, kw)
 
         # 4. Ensure all apps are enabled on enable
-        # if inputs.get("app_enable"):
+        # if context.get("app_enable"):
         #    for app in apps:
         #        state.add_update(app, enabled=True)
 
@@ -200,7 +237,7 @@ class ReconciliationPlan(Plan):
 
 
 class AppsState(ChangeSet, PlanState):
-    pass
+    _label = "Apps Plan"
 
 
 @register("apps")
@@ -310,8 +347,8 @@ class AppsPlan(Plan):
             items.append(self.reconciliation)
         return items + self.operations
 
-    def _apply(self, state, ctx, apps_ctx: AppsContext, **inputs):
-        yield from super()._apply(state, ctx, apps_ctx=apps_ctx, apps=apps_ctx.apps, **inputs)
+    def _apply(self, state, exec_ctx, apps_ctx: AppsContext, **context):
+        yield from super()._apply(state, exec_ctx, apps_ctx=apps_ctx, apps=apps_ctx.apps, **context)
 
         state_store = apps_ctx.state_store
         state.merge_from(cs for cs in state.children if isinstance(cs, ChangeSet))
@@ -321,9 +358,12 @@ class AppsPlan(Plan):
 
         if state.forward:
             state_store.partial_commit(state.forward, allow_create=True, merge=True)
+            state_store.save()
 
-    def _rollback(self, state, ctx, apps_ctx: AppsContext, **inputs):
-        yield from super()._rollback(state, ctx, apps_ctx=apps_ctx, **inputs)
+    def _rollback(self, state, exec_ctx, apps_ctx: AppsContext, **context):
+        yield from super()._rollback(state, exec_ctx, apps_ctx=apps_ctx, **context)
 
+        state_store = apps_ctx.state_store
         if state.backward:
-            apps_ctx.state_store.partial_commit(state.backward, allow_create=True)
+            state_store.partial_commit(state.backward, allow_create=True)
+            state_store.save()
