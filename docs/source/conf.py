@@ -37,6 +37,10 @@ extensions = [
 templates_path = ["_templates"]
 exclude_patterns = []
 
+autodoc_default_options = {
+    "private-members": True,
+}
+
 autosummary_generate = True
 
 root_doc = "index"

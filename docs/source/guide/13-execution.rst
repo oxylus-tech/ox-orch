@@ -24,3 +24,42 @@ Providing in simple operation don't seems to worth it. However lets look it diff
 - As the number of nested operations of a Plan grows, they will require more and more context data;
 - We want the end user to provide input for those context in a coherent way;
 - We want extra arguments to provide to all operations, as dry-run or the :py:mod:`~ox_orch.core.shell` to use (nb: allowing to run shell commands).
+
+
+.. code-block:: python
+
+    op = MyOperation()
+    spec = ExecutionSpec(
+        operation=MyOperation(),
+        hooks=["logging"],
+        inputs={
+            # This will resolve to custom MyContext registered as "my_ctx"
+            "my_ctx": {"name": "Alice"},
+            # Example AppsContext configuration
+            "apps_ctx": {
+                "store_backend": "file",
+                "store_args": {"path": "/tmp/apps.json"},
+                "state_store": "memory",
+            }
+        }
+    )
+
+    # You can de-serialize spec:
+    data = spec.model_dump(mode="json")
+    spec = ExecutionSpec.model_validate(data)
+
+
+Create and run:
+
+.. code-block:: python
+
+    executor = Executor()
+
+    # You may provide context as named argument here, they'll override any
+    # value provided by the spec inputs.
+    # As for example: apply(spec, apps_ctx=apps_ctx)
+    for state in executor.apply(spec):
+        print(state)
+
+    # IF you don't want to iterate, but only run:
+    state = executor.apply_sync(spec)
