@@ -7,7 +7,7 @@ We have seen how operations work, and part of the elements composing the stack o
 
 Basically:
 
-- The :py:class:`~ox_orch.operations.execution.ExecutionSpec` provide initial arguments to the Executor (apply / rollback).
+- The :py:class:`~ox_orch.operations.execution.ExecutionSpec` provides initial arguments to the Executor (apply / rollback).
 - The :py:class:`~ox_orch.operations.execution.Executor` method will:
     - Ensure context initialization and run the operation.
     - Emit event to registered hooks at different stages (see :py:mod:`ox_orch.hooks`).
@@ -19,11 +19,11 @@ Basically:
 
 *So why an executor?*
 
-Providing in simple operation don't seems to worth it. However lets look it differently:
+Providing it for a simple operation doesn't seem to worth it. However lets take a different perspective:
 
 - As the number of nested operations of a Plan grows, they will require more and more context data;
 - We want the end user to provide input for those context in a coherent way;
-- We want extra arguments to provide to all operations, as dry-run or the :py:mod:`~ox_orch.core.shell` to use (nb: allowing to run shell commands).
+- We want extra arguments to provide to all operations, as dry-run or the :py:mod:`~ox_orch.core.shell` to use (nb: allowing to run shell commands). This is for example used by the install operations to know in which environment to run the package installer.
 
 
 .. code-block:: python
