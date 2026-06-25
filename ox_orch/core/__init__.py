@@ -1,3 +1,9 @@
+"""
+This module provide all base classes and abstractions used by the ox-orch engine.
+
+Most of the sub-modules members are reexported here.
+"""
+
 from .contexts import CONTEXT_INPUT_REGISTRY, ContextInput, ContextInputs, Context, RunContext
 from .files import FileBackend, YAMLBackend, JSONBackend, JSONLBackend
 from .events import Hook, HookEmitter

@@ -1,0 +1,116 @@
+from __future__ import annotations
+from typing import Any
+
+from pydantic import Field
+
+
+from ox_orch.core import stores, JSONBackend, register, Registry, PolymorphicModel, FileBackend, RegisteredClass
+from .app import Application
+from .state import AppState, AppStateFeature, InstallOrigin
+
+
+__all__ = (
+    "APP_STATE_FEATURE_REGISTRY",
+    "APP_STATE_STORE_FEATURE_REGISTRY",
+    "AppStateStoreFeature",
+    "AppStateStoreModel",
+    "AppStateStore",
+    "AppStateMemoryStore",
+    "AppStateFileStore",
+)
+
+
+APP_STATE_FEATURE_REGISTRY = Registry()
+APP_STATE_STORE_FEATURE_REGISTRY = Registry()
+
+
+class AppStateStoreFeature(PolymorphicModel):
+    """
+    Extra features that can be appended to the store itself.
+
+    See :py:class:`.app.AppFeature` for more information about how features
+    work.
+    """
+
+    __registry__ = APP_STATE_STORE_FEATURE_REGISTRY
+
+
+class AppStateStoreModel(stores.FileStoreModel):
+    """Provide features to the AppStateStore."""
+
+    data: dict[str, AppState] = Field(default_factory=dict)
+    features: dict[str, AppStateStoreFeature] = Field(default_factory=dict)
+    """ Optional features extension data. """
+
+
+APP_STATE_STORE_REGISTRY = Registry()
+
+
+class AppStateStore(stores.Store, RegisteredClass):
+    """Application state store."""
+
+    __registry__ = APP_STATE_STORE_REGISTRY
+
+    model_class = AppState
+    key = "id"
+    data: dict[str, AppState] = Field(default_factory=dict)
+    features: dict[str, AppStateStoreFeature] = None
+
+    def __init__(self, *args, features: dict[str, AppStateStoreFeature] | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.features = features or {}
+
+    def get_or_create(self, app: Application, **kwargs) -> AppState:
+        """
+        Return a state for the provided app or create a new one.
+
+        :param app: the related application
+        :param **kwargs: init arguments when creating a new app.
+        """
+        state = self.get(app.id)
+        if not state:
+            state = app.create_state(**kwargs)
+            self.commit([state])
+        return state
+
+    def item_update(self, item: AppState, values: dict[str, Any], merge: bool = False):
+        """
+        Item update handling features partial update.
+        """
+        if not merge:
+            super().item_update(item, values)
+            return
+
+        features = item.features
+
+        for field, value in values.items():
+            match field:
+                case "features":
+                    for name, feature_vals in value.items():
+                        if name not in features:
+                            item.features[name] = AppStateFeature.from_type(name, **feature_vals)
+                        else:
+                            super().item_update(item.features[name], feature_vals)
+                case "origin":
+                    if item.origin == InstallOrigin.DEPENDENCY:
+                        item.origin = value
+                case _:
+                    setattr(item, field, value)
+
+
+@register("memory")
+class AppStateMemoryStore(AppStateStore, stores.MemoryStore):
+    pass
+
+
+@register("file")
+class AppStateFileStore(AppStateStore, stores.FileStore):
+    backend: FileBackend = JSONBackend(AppStateStoreModel)
+
+    def load(self):
+        model = super().load()
+        self.features = model.features
+        return model
+
+    def get_save_data(self, **kwargs):
+        return super().get_save_data(features=self.features)

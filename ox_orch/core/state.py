@@ -86,6 +86,7 @@ class State(StateInfo):
     """ Last update datetime. """
 
     _exc: Exception | None = None
+    """ Exception causing state failure. """
     _source: Any | None = None
     """ Source path or id, set and used by the backend. """
     _transitions: ClassVar[dict[str, set[str]]] = {

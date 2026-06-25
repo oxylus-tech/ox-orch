@@ -1,0 +1,54 @@
+Package;Feature;Priority;Estimation;Version;;;Description
+MVP / core;Layout and architecture;0;;MVP;;;
+;"Assets :
+
+  - building
+  - integration into Django
+  - core libraries and components
+  - SFC & dynamic loading
+  - lists:
+
+    - batch actions
+    - toolbar: filters, reload";"
+
+0
+0
+0
+2
+
+
+2
+2";;MVP;;;
+;"Backend:
+
+  - bases for: app, models, views, api, assets;
+  - routing
+  - templates";"
+
+0
+0
+0";;MVP;;;
+;Errors & HTTP errors reporting;1;;MVP;;;
+MVP / core.auth;View / API / Assets integration;0;;MVP;;;
+;Login / Logout;1;;MVP;;;
+;Permissions : views, API;0;;MVP;;;
+ ;Permissions : assets (panels / components / menus);0;;MVP;;;
+;Groups: assign user from group panel;2;;MVP;;;
+MVP / core.settings;Base;1;;MVP;;;
+;User settings: base, panel, integration;1;;MVP;;;
+;System settings: base, panel, integration;1;;MVP;;;
+;Application settings: base, panel, integration;1;;MVP;;;
+;;;;;;;
+MVP / auth;User: CRUD;1;;MVP;;;
+;Groups: CRUD;1;;MVP;;;
+;Permissions: CRUD;1;;MVP;;;
+;;;;;;;
+MVP / contacts;"Models and design:
+
+  - Contact, Companies, assignement;
+  - link to User & group
+  - Address book
+  - views, widgets, actions";2;;MVP;;;
+;Views and assets;2;;MVP;;;
+;Settings;2;;MVP;;;
+;Integration into other apps (SFC);2;;MVP;;;

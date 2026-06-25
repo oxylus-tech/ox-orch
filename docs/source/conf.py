@@ -1,7 +1,10 @@
 from pathlib import Path
+import os
 import sys
 
 sys.path.insert(0, str(Path("..", "..").resolve()))
+sys.path.insert(0, os.path.abspath("_ext"))
+
 # os.environ["DJANGO_SETTINGS_MODULE"] = "instance.settings"
 # django.setup()
 
@@ -28,10 +31,13 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",
     "sphinx_rtd_theme",
+    "public_api",
 ]
 
 templates_path = ["_templates"]
 exclude_patterns = []
+
+autosummary_generate = True
 
 root_doc = "index"
 

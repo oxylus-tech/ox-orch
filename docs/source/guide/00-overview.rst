@@ -1,3 +1,5 @@
+.. _guide-overview:
+
 Overview
 ========
 
@@ -10,16 +12,21 @@ and application reconciliation. It replaces imperative deployment scripts with a
 Quickstart
 ----------
 
-Define a workflow:
+Define a workflow. Here is an example for a regular Django applications installation or update:
 
 .. code-block:: python
 
-    from ox_orch.operations import AppsPlan, UvInstall
-    from ox_orch.django import DjangoReconciliation
+    from ox_orch.operations import AppsPlan, UvInstall, ForkOperation
+    from ox_orch.django import DjangoEnable, DjangoReconciliation
 
     install_apps = AppsPlan(
         install=UvInstall(),
-        after_install=DjangoReconciliation(),
+        operations=[
+            DjangoEnable(),
+            ForkOperation(
+                operation=DjangoReconciliation(),
+            )
+        ]
     )
 
 
@@ -80,13 +87,6 @@ Rollback becomes trivial:
     # That's it.
 
 
-.. note::
-
-    We could have passed down ``apps_ctx`` to ExecutionSpec's ``input``. However, it would be wrong.
-
-    The goal of this class is to provide user's input data to run the execution, which implies that they shall be serializable and only data oriented. User can not inject custom code or behavior.
-
-
 Concepts
 --------
 
@@ -104,68 +104,31 @@ those transitions.
 
 Small summary of the concepts:
 
-- Operation: the core abstraction to run an action. A :py:class:`~ox_orch.operations.plan.Plan` allows to run multiple
-  operation sequentially.
-- State: keep track of the operation execution state.
-- Executor: the class responsible to run the operation, providing feedback about what is happening.
-- Store: store state and data in order to reuse them, using different backends.
 
 
-Operation
-.........
+Where is a brief overview of the main classes and their relations:
 
-The :py:class:`~ox_orch.operations.base.Operation` is the base unit of action. It is responsible for:
-
-- Apply and rollback execution;
-- Track of the execution using states;
-- Persist and restore execution state;
-- Expose deterministic and reproducible behavior;
-- Validate operation-specific configuration;
-- Emit execution events through state transitions;
-- Integrate with executors, hooks and stores;
-- Provide reconciliation capabilities when supported by subclasses;
-
-Operations are declarative objects describing *what* should happen rather than
-*how* to execute a deployment script. They are designed to be serializable,
-composable and reusable across different execution environments.
-
-It has two main methods:
-
-- :py:meth:`~ox_orch.operations.base.Operation.apply`: run the operation;
-- :py:meth:`~ox_orch.operations.base.Operation.rollback`: reverse the operation using provided state;
-
-Both actually yields :py:class:`~ox_orch.operations.OperationState` to the caller, allowing to keep him updated about the different state changes.
-
-An important subclass of Operation is :py:class:`~ox_orch.operations.plan.Plan`, allowing multiple nested operations to run. Though the Plan class only handles providing them as a list, the subclasses may implement different behaviors.
-
-You must distinct two kind of input for an operation:
-
-- *The configuration of the operation itself* static accross different calls over different execution contexts. This MUST be Pydantic's serializable data, as Operation are Pydantic models.
-- *The running context* which provides user inputs arguments among other contextual values used for apply/rollback.
+.. image:: ../static/overview-classes.png
 
 
-State
-.....
 
-The :py:class:`~ox_orch.core.state.State` is responsible for:
+- Operation:
 
-- Keeping track of the actual status of the execution (PENDING, COMPLETED, FAILED, ...);
-- Validate transition between the different status;
-- Keeping information required to rollback the operation;
-- Optionally provide extra information;
-- Persist execution progress;
-- Store execution results and metadata;
-- Allow interrupted executions to resume safely;
-- Provide a deterministic representation of an operation lifecycle;
+    - The core abstraction to run an action. A :py:class:`~ox_orch.operations.plan.Plan` allows to run multiple child operations sequentially;
+    - It has an apply and rollback methods;
 
-For an operation, the actual state class used is :py:class:`~ox_orch.operations.base.OperationState` that adds the following:
+- Operation State: keep track of the operation execution state, also used for rollbacking into the previous state.
 
-- Link to an operation (by id);
-- Keep an history of status changes;
-- Keep the run context (only on the root operation state);
-- Nested states for plan state and derived (subclassing :py:class:`~ox_orch.core.state.TreeState`);
-- Store operation-specific rollback data;
-- Track execution timestamps and diagnostics;
+- Context: data provided to the operation (and children), as stores, resolved object, etc.
+- ContextInput: user input value used to build contexts (as object id, etc.);
+- Executor: the class responsible to run the operation, providing feedback about what is happening (yield states, run hooks, etc.).
+- ExecutorSpec: provide input values to apply/rollback the executor.
+
+
+Other objects that you will encounter:
+
+- Store: store data in order to reuse them, using different backends (memory, file, extensible). Used for states, applications and their state, etc.
+- Registry / RegisteredClass / register: allows to register classes to different registries. This is used at a lot of places, as for operation and their state classes, context inputs, etc.
 
 Executor
 ........

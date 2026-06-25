@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Generator
+from typing import Generator
 
 from pydantic import Field, field_validator
 
@@ -101,16 +101,6 @@ class ExecutionContext(Context):
     """ An execution specification. """
     shell: Shell | None = field(default_factory=lambda: Shell.from_spec())
     """ Shell backend used to run commands. """
-    data: dict[str, Any] = field(default_factory=dict)
-    """ Extra input data. """
-
-    def get(self, key: str, default=None) -> Any:
-        """Return data by key."""
-        return self.data.get(key, default)
-
-    def set(self, key: str, value: Any):
-        """Set data to the context."""
-        self.data[key] = value
 
 
 class Executor(HookEmitter):

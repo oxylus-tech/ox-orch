@@ -1,0 +1,54 @@
+<mxfile host="Electron">
+  <diagram name="Page-1" id="lpbDxW7wa6G7cKZghbFK">
+    <mxGraphModel dx="822" dy="486" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="SIGLn04VL8yOzEGhAz-K-5" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;b&gt;ContextInput&lt;/b&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ ... (custom data)&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ build_context(c&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;ontext_inputs&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;):&lt;/span&gt;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;Context&lt;/span&gt;&lt;/p&gt;" vertex="1">
+          <mxGeometry height="110" width="190" x="360" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="SIGLn04VL8yOzEGhAz-K-6" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;b&gt;ContextInputs&lt;/b&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ inputs: dict[str, ContextInput]&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ contexts: dict[str, Context]&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ build(reset:bool=False): Type&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ resolve(key: str): Type&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ build_context(key: str): Context&lt;/p&gt;" vertex="1">
+          <mxGeometry height="130" width="200" x="20" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="SIGLn04VL8yOzEGhAz-K-7" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;b&gt;Context&lt;/b&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ ... (custom internal data)&lt;/p&gt;" vertex="1">
+          <mxGeometry height="50" width="190" x="360" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="SIGLn04VL8yOzEGhAz-K-9" edge="1" parent="1" source="SIGLn04VL8yOzEGhAz-K-5" style="html=1;verticalAlign=bottom;endArrow=block;rounded=0;exitX=0.999;exitY=0.632;exitDx=0;exitDy=0;exitPerimeter=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;" target="SIGLn04VL8yOzEGhAz-K-7" value="create">
+          <mxGeometry relative="1" width="80" as="geometry">
+            <Array as="points">
+              <mxPoint x="580" y="220" />
+              <mxPoint x="580" y="85" />
+            </Array>
+            <mxPoint x="270" y="330" as="sourcePoint" />
+            <mxPoint x="350" y="330" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="SIGLn04VL8yOzEGhAz-K-12" edge="1" parent="1" source="SIGLn04VL8yOzEGhAz-K-6" style="html=1;verticalAlign=bottom;endArrow=block;rounded=0;exitX=0.994;exitY=0.617;exitDx=0;exitDy=0;exitPerimeter=0;entryX=-0.006;entryY=0.594;entryDx=0;entryDy=0;entryPerimeter=0;edgeStyle=orthogonalEdgeStyle;" target="SIGLn04VL8yOzEGhAz-K-5" value="call">
+          <mxGeometry relative="1" width="80" x="0.4781" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="270" y="330" as="sourcePoint" />
+            <mxPoint x="350" y="330" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="SIGLn04VL8yOzEGhAz-K-13" edge="1" parent="1" source="SIGLn04VL8yOzEGhAz-K-6" style="html=1;verticalAlign=bottom;endArrow=block;rounded=0;exitX=0.999;exitY=0.842;exitDx=0;exitDy=0;exitPerimeter=0;entryX=-0.006;entryY=0.592;entryDx=0;entryDy=0;entryPerimeter=0;edgeStyle=orthogonalEdgeStyle;" target="SIGLn04VL8yOzEGhAz-K-5" value="">
+          <mxGeometry relative="1" width="80" as="geometry">
+            <mxPoint x="270" y="330" as="sourcePoint" />
+            <mxPoint x="350" y="330" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="SIGLn04VL8yOzEGhAz-K-14" edge="1" parent="1" source="SIGLn04VL8yOzEGhAz-K-6" style="endArrow=diamondThin;endFill=0;endSize=24;html=1;rounded=0;exitX=1.014;exitY=0.293;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;" target="SIGLn04VL8yOzEGhAz-K-7" value="">
+          <mxGeometry relative="1" width="160" as="geometry">
+            <mxPoint x="230" y="330" as="sourcePoint" />
+            <mxPoint x="390" y="330" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="SIGLn04VL8yOzEGhAz-K-15" edge="1" parent="1" source="SIGLn04VL8yOzEGhAz-K-6" style="endArrow=diamondThin;endFill=0;endSize=24;html=1;rounded=0;exitX=1.01;exitY=0.434;exitDx=0;exitDy=0;exitPerimeter=0;" value="">
+          <mxGeometry relative="1" width="160" as="geometry">
+            <mxPoint x="230" y="330" as="sourcePoint" />
+            <mxPoint x="360" y="179" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

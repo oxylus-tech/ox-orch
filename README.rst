@@ -11,12 +11,17 @@ Example of a plan to install or update Django applications:
 
 .. code-block:: python
 
-    from ox_orch.operations import AppsPlan, UvInstall
-    from ox_orch.django import DjangoReconciliation
+    from ox_orch.operations import AppsPlan, UvInstall, ForkOperation
+    from ox_orch.django import DjangoEnable, DjangoReconciliation
 
-    AppsPlan(
+    install_apps = AppsPlan(
         install=UvInstall(),
-        after_install=DjangoReconciliation()
+        operations=[
+            DjangoEnable(),
+            ForkOperation(
+                operation=DjangoReconciliation(),
+            )
+        ]
     )
 
 

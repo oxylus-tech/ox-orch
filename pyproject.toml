@@ -36,7 +36,7 @@ dependencies = [
 [project.scripts]
 ox-orch = "ox_orch.cli.main:cli"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "black>=26.5.1",
     "ipython>=9.14.0",
