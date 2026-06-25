@@ -29,9 +29,9 @@ class TestPyPIClient:
 
 class TestAppProvider:
     @pytest.mark.asyncio
-    async def test_build(self, app_provider):
+    async def test_abuild(self, app_provider):
         pkgs = ["pytest", "packaging", "black"]
-        apps = await app_provider.build(pkgs)
+        apps = await app_provider.abuild(pkgs)
 
         apps = {a.id: a for a in apps}
         assert apps

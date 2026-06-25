@@ -67,7 +67,7 @@ class InstallOperation(ShellMixin, Operation):
         apps_req = self._snapshot(apps, True)
         self.log("Install:\n" + "\n".join(f"- {v['package']} @ {v['version']}" for v in state.backward.values()))
 
-        if exec_ctx.run.dry_run:
+        if inputs.dry_run:
             state.forward = apps_req
         else:
             self.install(state, exec_ctx.shell, apps_req.values(), options=options)

@@ -4,8 +4,8 @@
 
 
 [project]
-name = "django-installer"
-description = "Define application installation workflow, and allow users to install them."
+name = "ox-orch"
+description = "Orchestration of application lifecycle workflows."
 readme = "README.rst"
 license = "GPL-3.0-or-later"
 version = "0.0.1"

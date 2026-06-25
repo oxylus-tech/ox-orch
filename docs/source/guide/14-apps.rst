@@ -22,6 +22,31 @@ And operations:
 - :py:class:`~ox_orch.operations.install.PipInstall`, :py:class:`~ox_orch.operations.install.UvInstall`, :py:class:`~ox_orch.operations.install.PoetryInstall`: install packages using different package managers;
 
 
+Application
+-----------
+
+An Application is the representation of an installable/installed package in ox-orch. It is not a full python package but provide at least a few features:
+
+- :py:class:`~ox_orch.apps.app.Application.package` / :py:class:`~ox_orch.apps.app.Application.source`: when a source is provided use it a installation source;
+- :py:class:`~ox_orch.apps.app.Application.releases`: an application can contains multiple releases;
+- :py:class:`~ox_orch.apps.app.Application.dependencies` to other applications that may differ from the python package one. The application store can resolve application dependency tree and sort it topologically.
+
+
+.. note::
+
+    Why do we need the Application class instead of passing raw package names?
+
+    First reason is the consistency: we have the object to install and its actual state.
+    We don't want to reproduce the work of packages manager but still may want to
+    provide nice feature, as dependency resolution (think for example of you amazing platform's app market).
+
+    You shall think of Application similar to a Python package, but with slight differences: the data structure is much simpler while allowing implementator
+    to provide custom app stores.
+
+
+AppsPlan Workflow
+-----------------
+
 The basic workflow of application installation looks like this:
 
 .. image:: ../static/guide-apps-workflow.png
@@ -178,3 +203,29 @@ Note that features nested data will be merged nicely, meaning that:
 
 When those changes are committed to the store, this one will ensure data to be created
 if they are missing.
+
+
+Application Provider
+--------------------
+
+We provide an helper class :py:class:`~ox_orch.apps.provider.AppProvider`, that can be used to retrieve packages from Pypi and map them into Application. This allows you to ease your life, like this:
+
+.. code-block:: python
+
+    from pathlib import Path
+
+    from ox_orch.apps import AppFileStore
+    from ox_orch.apps.provider import AppProvider
+
+
+    apps = AppProvider().build(["pydantic", "oxylus", "packaging", "black"])
+
+    # Keep them in persistent memory for reuse:
+    apps_store = AppFileStore(Path("./apps.json"), items=apps)
+    apps_store.load()
+
+
+This is just an helper class without doing much work. However lets highlight what it does:
+
+- Fetch the packages from Pypi
+- Assign dependencies that have explicitely been required. For example here, ``black`` Application will have only one dependency: ``packaging`` (all other ones are not assigned).

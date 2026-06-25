@@ -19,6 +19,8 @@ Define a workflow. Here is an example for a regular Django applications installa
     from ox_orch.operations import AppsPlan, UvInstall, ForkOperation
     from ox_orch.django import DjangoEnable, DjangoReconciliation
 
+    # Create an app plan that will run package installation, then
+    # Django reconciliation.
     install_apps = AppsPlan(
         install=UvInstall(),
         operations=[
@@ -36,26 +38,28 @@ Once the workflow is defined, you will execute it like this:
 
 .. code-block:: python
 
-    from ox_orch.operations.execution import Executor, ExecutionSpec
+    from pathlib import Path
+
     from ox_orch.apps import Application, AppsContext, AppMemoryStore, AppStateMemoryStore
+    from ox_orch.apps.provider import AppProvider
     from ox_orch.hooks import LoggingHook
+    from ox_orch.operations.execution import Executor, ExecutionSpec
 
     # ...
 
-    # We have to provide apps_ctx to AppsPlan, which gather:
-    # - An app store: store applications, here in memory
-    # - An app state store: store application states, in memory too;
-    # - A list of apps metadata to use
-    applications = [
-        # By default, package is set to the id
-        Application(id="test-1", version="0.0.1"),
-        Application(id="test-2", version="1.4.2", package="test-2-pkg"),
-        Application(id="test-3", version="1.4.3", package="test-3-pkg")
-    ]
+    # AppProvider is an utility class that fetch package from Pypi and transform
+    # them into Application.
+    # Here we save them into an application store so we can reuse them for later
+    # without fetching Pypi.
+    apps = AppProvider().build(["pydantic", "oxylus", "oxylus-erp"])
+    store = AppFilteStore(Path("/tmp/apps.js"), items=apps)
+    store.save()
 
-    apps_ctx = AppsContext.from_apps_ids(
-        ["test-1", "test-2"],
-        store=AppMemoryStore(items=applications),
+    # AppsPlan requires an AppsContext with application + stores and state store
+    #
+    apps_ctx = AppsContext(
+        store.get_all("pydantic", "packaging"),
+        store=store,
         state_store=AppStateMemoryStore(),
     )
 
@@ -87,6 +91,7 @@ Rollback becomes trivial:
     # That's it.
 
 
+
 Concepts
 --------
 
@@ -100,10 +105,6 @@ Together they provide a deterministic execution model where every action
 produces an explicit state transition. Most other components of Ox-Orch
 (executors, plans, hooks and stores) exist to coordinate, observe or persist
 those transitions.
-
-
-Small summary of the concepts:
-
 
 
 Where is a brief overview of the main classes and their relations:
@@ -129,36 +130,3 @@ Other objects that you will encounter:
 
 - Store: store data in order to reuse them, using different backends (memory, file, extensible). Used for states, applications and their state, etc.
 - Registry / RegisteredClass / register: allows to register classes to different registries. This is used at a lot of places, as for operation and their state classes, context inputs, etc.
-
-Executor
-........
-
-The executor is the main utility class that you'll need to run operations. It handles:
-
-- Load a provided configuration (:py:class:`~ox_orch.operations.execution.ExecutionSpec`);
-- Initialize the context used for running operations;
-- Run the operation(s), calling hooks at different stages;
-- Create and manage operation states;
-- Coordinate state persistence through stores;
-- Handle rollback execution;
-- Restore previous execution states when provided;
-- Emit execution events and notifications;
-- Provide synchronous and streaming execution APIs;
-- Propagate execution context to nested operations;
-
-
-Store
-.....
-
-Stores are responsible for persisting data used by the orchestration engine.
-
-Ox-Orch distinguishes between two broad categories of stores:
-
-- Metadata stores, which provide access to managed resources;
-- State stores, which persist operation execution states.
-
-Stores may use various backends such as in-memory implementations,
-filesystems, databases or remote services.
-
-By abstracting persistence behind dedicated interfaces, operations remain
-independent from the underlying storage technology.

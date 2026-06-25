@@ -59,7 +59,11 @@ class AppProvider:
     def __init__(self, client: PyPIClient | None = None):
         self.client = client or PyPIClient()
 
-    async def build(self, packages: list[str]) -> list[Application]:
+    def build(self, packages: list[str]) -> list[Application]:
+        """Sync version of :py:meth:`abuild`."""
+        return asyncio.run(self.abuild(packages))
+
+    async def abuild(self, packages: list[str]) -> list[Application]:
         """
         Fetch python packages from repository and return a list of
         Applications.

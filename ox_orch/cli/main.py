@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import click
@@ -109,7 +108,7 @@ def apps_import(packages, path):
     app_store.load()
 
     provider = AppProvider()
-    apps = asyncio.run(provider.build(packages))
+    apps = provider.build(packages)
 
     print(f"We got {len(apps)} application from the provided package list.")
     app_store.commit(apps)
