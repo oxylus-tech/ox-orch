@@ -31,7 +31,7 @@ __all__ = (
 AppId: TypeAlias = str
 """ Application ID """
 AppVersion: TypeAlias = str
-""" Applicatino version. """
+""" Application version. """
 AppRef: TypeAlias = tuple[AppId, AppVersion | None]
 """ Application reference. """
 

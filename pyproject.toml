@@ -9,6 +9,8 @@ description = "Define application installation workflow, and allow users to inst
 readme = "README.rst"
 license = "GPL-3.0-or-later"
 version = "0.0.1"
+authors = [{ name="Thomas Baquet", email="thomas@oxylus.app" }]
+
 
 # dynamic = ["version"]
 classifiers = [
@@ -27,6 +29,7 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.4.1",
+    "httpx>=0.28.1",
     "packaging>=26.2",
     "pydantic>=2.13.4",
     "pyyaml>=6.0.3",
@@ -42,7 +45,8 @@ dev = [
     "ipython>=9.14.0",
     "pre-commit>=4.6.0",
     "pytest>=9.0.3",
-    "pytest-django>=4.12.0",
+    "pytest-asyncio>=1.4.0",
+    # "pytest-django>=4.12.0",
     "ruff>=0.15.15",
 ]
 docs = [

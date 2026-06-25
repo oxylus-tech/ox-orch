@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import click
@@ -7,10 +8,11 @@ from rich import print
 from rich.align import Align
 from rich.table import Table
 
-from ox_orch.operations.execution import Executor, ExecutionSpec
-from ox_orch.core.files import JSONBackend
-from ox_orch.core.trace import ExecutionReplay
-from ox_orch.operations import OPERATION_REGISTRY, STATE_REGISTRY
+from ox_orch.apps import AppFileStore
+from ox_orch.apps.provider import AppProvider
+
+from ox_orch.core import JSONBackend, ExecutionReplay
+from ox_orch.operations import OPERATION_REGISTRY, STATE_REGISTRY, Executor, ExecutionSpec
 from ox_orch.utils import load_modules
 
 
@@ -40,7 +42,7 @@ def cli(ctx, modules):
 
 
 @cli.command("operations")
-@click.option("--details", is_flag=True, help="Show detailed informations.")
+@click.option("--details", "-d", is_flag=True, help="Show detailed informations.")
 def list_operations(details):
     """
     List registered operations.
@@ -51,6 +53,7 @@ def list_operations(details):
         click.echo(f"{type_id:<40} {cls.__module__}.{cls.__name__}")
 
     if details:
+        print()
         display_registry_info("Operations & Fields", OPERATION_REGISTRY)
 
 
@@ -63,13 +66,8 @@ def list_hooks():
         click.echo(f"{type_id:<30} {cls.__module__}.{cls.__name__}")
 
 
-@cli.command("show-operations")
-def show_operations():
-    """List registered operations."""
-
-
-@cli.command("show-states")
-def show_states():
+@cli.command("states")
+def list_states():
     """List registered operation states."""
     display_registry_info("Operations State & Fields", STATE_REGISTRY)
 
@@ -92,6 +90,43 @@ def display_registry_info(title, registry):
                 )
         table.add_section()
     print(table)
+
+
+# ---------------------------------------------------------
+# Applications
+# ---------------------------------------------------------
+@cli.group()
+def apps():
+    pass
+
+
+@apps.command("import")
+@click.argument("path", type=click.Path(dir_okay=False, path_type=Path))
+@click.argument("packages", nargs=-1)
+def apps_import(packages, path):
+    """Import applications from Pypi and save them to the AppStore."""
+    app_store = AppFileStore(path=path)
+    app_store.load()
+
+    provider = AppProvider()
+    apps = asyncio.run(provider.build(packages))
+
+    print(f"We got {len(apps)} application from the provided package list.")
+    app_store.commit(apps)
+    app_store.save()
+    print(f"Store saved to `{path}`")
+
+
+@apps.command("list")
+@click.argument("path", type=click.Path(dir_okay=False, path_type=Path))
+def apps_list(path):
+    """Import applications from Pypi and save them to the AppStore."""
+    app_store = AppFileStore(path=path)
+    app_store.load()
+
+    print(f"[b yellow]{'Id':<30} {'Version':<20} Package[/b yellow]")
+    for app in app_store.all():
+        print(f"{app.id:<30} {app.version:<20} {app.package}")
 
 
 # ---------------------------------------------------------
@@ -189,18 +224,3 @@ def replay(trace_path: Path, fmt: str):
         click.echo(f"Run: {state.run_id}")
         click.echo(f"Operations: {len(state.operations)}")
         click.echo(f"Errors: {len(state.errors)}")
-
-
-# ---------------------------------------------------------
-# dynamic loader (placeholder)
-# ---------------------------------------------------------
-def load_operation(path: str):
-    """
-    Load an operation from module path.
-
-    Example:
-        ox_orch.operations.pip:PipInstall
-    """
-    module_path, class_name = path.split(":")
-    module = __import__(module_path, fromlist=[class_name])
-    return getattr(module, class_name)()
