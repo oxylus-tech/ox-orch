@@ -18,3 +18,5 @@ python:
       command: sync
       groups:
           - docs
+          - django
+          - dev
