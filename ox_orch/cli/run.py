@@ -7,7 +7,7 @@ import traceback
 import click
 from rich import print
 
-from ox_orch.core import Status
+from ox_orch.core import files, Status, ExecutionReplay
 from ox_orch.operations import ExecutionSpec, OperationState, Executor
 
 from .base import cli
@@ -123,3 +123,23 @@ def run_executor(gen):
             print(f"[b red]{msg}[/b red]\n")
             traceback.print_exception(state._exc)
             print("[b red]" + len(msg) * "-" + "[/b red]")
+
+
+@cli.command()
+@click.option("--trace", "trace_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--format", "fmt", type=click.Choice(["json", "summary"]), default="summary")
+def replay(trace_path: Path, fmt: str):
+    """
+    Replay a previously executed run from trace.
+    """
+
+    backend = files.JSONBackend(None)
+    replayer = ExecutionReplay(backend=backend)
+
+    state = replayer.replay(trace_path)
+    if fmt == "json":
+        click.echo(state.model_dump_json(indent=2))
+    else:
+        click.echo(f"Run: {state.run_id}")
+        click.echo(f"Operations: {len(state.operations)}")
+        click.echo(f"Errors: {len(state.errors)}")
