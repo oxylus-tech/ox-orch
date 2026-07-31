@@ -3,7 +3,7 @@
 Contexts
 ========
 
-When working with operation you want use contexts to by pass values. As you might have noticed, we can provide ``apply`` and ``rollback`` methods arbitrary named arguments. Those form the *context*, allowing operation to be stateless.
+When working with operations, you might have noticed that we can provide ``apply`` and ``rollback`` methods arbitrary named arguments. Thoses form the *context*, allowing operation to be stateless.
 
 It means that operation's fields only are configuration that shall persist around multiple runs.
 
@@ -102,7 +102,7 @@ The two first attributes may have one of the following forms:
 
     class MyOperation(Operation):
         __apply_spec__ = {
-            # Either None or
+            # Either None or int
             "my_ctx": (MyContext, None|int),
             "exec_ctx": ExecutionContext
         }
@@ -119,6 +119,7 @@ The two first attributes may have one of the following forms:
 
     # This works:
     op.apply(state, exec_ctx=ExecutionContext(), name="Alice")
+    op.apply(state, exec_ctx=ExecutionContext(), my_ctx=123)
 
     # The followings raise ValueError:
     op.apply(state, exec_ctx=123)

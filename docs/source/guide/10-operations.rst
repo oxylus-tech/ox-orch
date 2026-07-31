@@ -45,6 +45,7 @@ operation. Here it simply "hello" and "goodbye" messages:
     from ox_orch.core import register
     from ox_orch.operations import Operation, OperationState
 
+    @register("hello")
     class HelloState(OperationState):
         _label = "Hello"
 
@@ -239,6 +240,7 @@ Stores
 Operation and OperationState can be committed to and retrieved from stores. A store is a container interface ensuring to provide owned objects by key, update them (full or partial), etc.
 
 They are responsible for:
+
 - owning specific objects and allow to query them;
 - updating them, either as a full commit or patching it;
 - saving and loading the data from a backend (if persistent). We have for example the :py:class:`~ox_orch.core.stores.FileStore` that do it on files. You can imagine to implement your own stores (eg. db persistence)

@@ -71,6 +71,11 @@ class DjangoEnable(Operation):
 
     __apply_spec__ = ("apps_ctx", "django_ctx")
     _label = "Django: enable applications"
+    _description = (
+        "Enable the applications in the Django project (using DjangoProject).\n"
+        "This method shall run before any other Django operation. Read the doc "
+        "for more info."
+    )
 
     def _apply(self, state, *_, apps_ctx, django_ctx, **__):
         django_ctx.project.enable(apps_ctx.apps)

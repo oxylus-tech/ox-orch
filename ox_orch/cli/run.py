@@ -18,16 +18,18 @@ __all__ = ("run", "apply", "rollback", "run_executor")
 
 
 @cli.group()
-@cli.argument("conf", click.Path(dir_okay=False, path_type=Path), required=True, help="Execution configuration file.")
-@cli.option(
+@click.argument("conf", type=click.Path(dir_okay=False, path_type=Path), required=True)
+@click.option(
     "--state",
     "-s",
-    click.Path(dir_okay=False, path_type=Path),
+    type=click.Path(dir_okay=False, path_type=Path),
     help="Path to state file to load (mandatory for rollback).",
 )
-@cli.option("--save", "-S", click.Path(dir_okay=False, path_type=Path), help="Path to save updated state.")
-@cli.option("--context", "-c", click.Path(dir_okay=False, path_type=Path), help="Use this file as inputs arguments")
-@cli.option(
+@click.option("--save", "-S", type=click.Path(dir_okay=False, path_type=Path), help="Path to save updated state.")
+@click.option(
+    "--context", "-c", type=click.Path(dir_okay=False, path_type=Path), help="Use this file as inputs arguments"
+)
+@click.option(
     "--input", "-i", multiple=True, help="Context value, as `key=value`, where value is a json serialized value."
 )
 @click.pass_context
@@ -60,9 +62,9 @@ def read_ctx(inputs, **context):
 
 
 @run.command("apply")
-@run.option("--save", is_flag=True, help="Save state.")
+@click.option("--rollback", is_flag=True, help="Rollback on failure.")
 @click.pass_context
-def apply(ctx):
+def apply(ctx, rollback=False):
     """Apply an operation."""
     spec = ctx.obj["spec"]
     inputs = ctx.obj["inputs"]
@@ -73,6 +75,10 @@ def apply(ctx):
 
     if save_to := ctx.obj["state_save_path"]:
         save_file(save_to, OperationState, state)
+
+    if state.status == Status.FAILED and rollback:
+        print("[yellow]Apply failed and rollback enabled:[/yellow] rollback")
+        run_executor(executor.rollback(spec, state, inputs))
 
 
 @run.command("rollback")
@@ -123,6 +129,8 @@ def run_executor(gen):
             print(f"[b red]{msg}[/b red]\n")
             traceback.print_exception(state._exc)
             print("[b red]" + len(msg) * "-" + "[/b red]")
+
+    return state
 
 
 @cli.command()

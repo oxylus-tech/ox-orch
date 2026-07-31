@@ -7,7 +7,7 @@ The whole story of states start with :py:class:`~ox_orch.core.state.State` base 
 
 It is responsible for:
 
-- Keeping track of the actual :py:class:`Status`;
+- Keeping track of the actual :py:class:`~ox_orch.core.state.Status`;
 - Validate transition between the different status;
 - Optionally provide extra information;
 
@@ -15,7 +15,7 @@ There are different subclasses of this class providing additional functionalitie
 
 - :py:class:`~ox_orch.core.state.TreeState`: support for nested states in :py:attr:`~ox_orch.core.state.TreeState.children`;
 - :py:class:`~ox_orch.core.state.HistoryState`: keep track of status updates in :py:attr:`~ox_orch.core.state.HistoryState.history`;
-- :py:class:`~ox_orch.core.state.ChangeSet`: provide  :py:attr:`~ox_orch.core.state.ChangeSet.forward` and :py:attr:`~ox_orch.core.state.ChangeSet.backward` attributes allowing forward and backward objects changes (used with store's :py:meth:`~ox_orch.core.stores.Store.partial commit`).
+- :py:class:`~ox_orch.core.state.ChangeSet`: provide  :py:attr:`~ox_orch.core.state.ChangeSet.forward` and :py:attr:`~ox_orch.core.state.ChangeSet.backward` attributes allowing forward and backward objects changes (used with store's :py:meth:`~ox_orch.core.stores.Store.partial_commit`).
 
 
 

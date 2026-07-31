@@ -303,7 +303,9 @@ class ChangeSet(BaseModel):
         """
         Register update values for an object by reference.
 
-        It only store the forward change. To provide the
+        It only store the forward change. To provide the backward
+        ones, use the :py:meth:`set_backward` method once alls changes have
+        been set.
 
         """
         if not values:
