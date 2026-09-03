@@ -3,12 +3,6 @@
 Overview
 ========
 
-Ox-Orch is a state-driven orchestration engine for deterministic application lifecycle management.
-
-It provides a structured way to define, execute, and rollback complex workflows such as package installation, migrations
-and application reconciliation. It replaces imperative deployment scripts with a composable, state-based execution model.
-
-
 Quickstart
 ----------
 

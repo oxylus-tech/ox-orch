@@ -1,5 +1,5 @@
-More infos
-----------
+More info
+---------
 
 Registries
 ..........
