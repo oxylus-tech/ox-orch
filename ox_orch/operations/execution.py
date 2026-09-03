@@ -51,6 +51,11 @@ class ExecutionSpec(ContextInput):
     - run metadata
     """
 
+    name: str = Field(default="", description="Workflow name")
+    """ Spec's name (informative purpose). """
+    description: str = Field(default="", description="A brief description of what it does")
+    """ Spec's description (informative purpose). """
+
     operation: Operation = Field(description="The operation to execute.")
     """ Operation to run. """
     hooks: list[str] = Field(default_factory=list, description="A list of hooks.")

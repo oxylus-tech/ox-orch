@@ -8,7 +8,7 @@ from pydantic import Field, field_validator
 from ox_orch.apps import Application, AppState, AppStore, AppStateStore, AppStateMemoryStore, InstallOrigin
 from ox_orch.core import register, Status, ChangeSet, ContextInput
 from .base import Operation
-from .install import InstallOperation
+from .install import InstallOperation, InstallContext
 from .plan import Plan, PlanState
 
 
@@ -45,7 +45,7 @@ class AppsContext:
         return cls(apps=apps, store=store, **kwargs)
 
 
-@register("app_ctx")
+@register("app")
 class AppContextInput(ContextInput):
     app: str = Field(description="Application id retrieved from app store")
 
@@ -56,7 +56,7 @@ class AppContextInput(ContextInput):
         return AppContext(app=app, app_state=state)
 
 
-@register("apps_ctx")
+@register("apps")
 class AppsContextInput(ContextInput):
     store_backend: str = Field(default="memory", description="Application store backend, as memory, or file.")
     store_args: dict[str, Any] = Field(default_factory=dict, description="Application store initial arguments.")
@@ -348,7 +348,9 @@ class AppsPlan(Plan):
         return items + self.operations
 
     def _apply(self, state, exec_ctx, apps_ctx: AppsContext, **context):
-        yield from super()._apply(state, exec_ctx, apps_ctx=apps_ctx, apps=apps_ctx.apps, **context)
+        context["install_ctx"] = InstallContext(packages=apps_ctx.apps)
+
+        yield from super()._apply(state, exec_ctx, apps_ctx=apps_ctx, **context)
 
         state_store = apps_ctx.state_store
         state.merge_from(cs for cs in state.children if isinstance(cs, ChangeSet))

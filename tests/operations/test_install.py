@@ -2,6 +2,7 @@ from ox_orch.core.shell import EchoShell
 from ox_orch.operations.install import (
     InstallOperation,
     InstallState,
+    InstallContext,
     PipInstall,
     UvInstall,
     PoetryInstall,
@@ -35,12 +36,14 @@ class TestInstallOperation:
         op = DummyInstall()
 
         state = InstallState()
-        apps = [
-            DummyApp("a", "pkg_a", "1.0", "0.9"),
-            DummyApp("b", "pkg_b", "2.0", None),
-        ]
+        install_ctx = InstallContext(
+            packages=[
+                DummyApp("a", "pkg_a", "1.0", "0.9"),
+                DummyApp("b", "pkg_b", "2.0", None),
+            ]
+        )
 
-        op._apply(state, exec_ctx, shell=EchoShell(), apps=apps)
+        op._apply(state, exec_ctx, shell=EchoShell(), install_ctx=install_ctx)
 
         assert "a" in state.backward
         assert "b" in state.backward

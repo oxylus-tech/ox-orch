@@ -18,13 +18,6 @@ __all__ = ("run", "apply", "rollback", "run_executor")
 
 
 @cli.group()
-@click.argument("conf", type=click.Path(dir_okay=False, path_type=Path), required=True)
-@click.option(
-    "--state",
-    "-s",
-    type=click.Path(dir_okay=False, path_type=Path),
-    help="Path to state file to load (mandatory for rollback).",
-)
 @click.option("--save", "-S", type=click.Path(dir_okay=False, path_type=Path), help="Path to save updated state.")
 @click.option(
     "--context", "-c", type=click.Path(dir_okay=False, path_type=Path), help="Use this file as inputs arguments"
@@ -33,7 +26,7 @@ __all__ = ("run", "apply", "rollback", "run_executor")
     "--input", "-i", multiple=True, help="Context value, as `key=value`, where value is a json serialized value."
 )
 @click.pass_context
-def run(ctx, conf, state=None, context=None, input=None, save=None):
+def run(ctx, state=None, context=None, input=None, save=None):
     """Run an operation workflow."""
     context_ = context and load_file(context, None) or {}
     inputs = read_ctx(input, **context_)
@@ -43,9 +36,6 @@ def run(ctx, conf, state=None, context=None, input=None, save=None):
 
     ctx.obj.update(
         {
-            "spec": load_file(conf, ExecutionSpec, exc=True),
-            "state": load_file(state, OperationState) or None,
-            "state_path": state,  # only state is expected to be updated
             "state_save_path": save,
             "inputs": inputs,
         }
@@ -62,11 +52,19 @@ def read_ctx(inputs, **context):
 
 
 @run.command("apply")
+@click.argument("conf", type=click.Path(dir_okay=False, path_type=Path), required=True)
+@click.option(
+    "--state",
+    "-s",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Path to state file to load (mandatory for rollback).",
+)
 @click.option("--rollback", is_flag=True, help="Rollback on failure.")
 @click.pass_context
-def apply(ctx, rollback=False):
+def apply(ctx, conf, state=None, rollback=False):
     """Apply an operation."""
-    spec = ctx.obj["spec"]
+    spec = (load_file(conf, ExecutionSpec, exc=True),)
+    state = load_file(state, OperationState) or None
     inputs = ctx.obj["inputs"]
     executor = Executor()
 
@@ -82,8 +80,13 @@ def apply(ctx, rollback=False):
 
 
 @run.command("rollback")
+@click.argument("conf", type=click.Path(dir_okay=False, path_type=Path), required=True)
+@click.argument(
+    "state",
+    type=click.Path(dir_okay=False, path_type=Path),
+)
 @click.pass_context
-def rollback(ctx):
+def rollback(ctx, conf, state):
     """Rollback an operation using provided status."""
     if not ctx.obj["state"]:
         raise ValueError("Missing state file to rollback from.")
@@ -91,10 +94,11 @@ def rollback(ctx):
     save_to = ctx.obj["state_save_path"]
     if not save_to:
         print("[yellow][Warning][/yellow] You did not provide a path to save the state file using --save.")
-        print(f"We will use [magenta]{ctx['state_path']}[/magenta]")
-        save_to = ctx.obj["state_path"]
+        print(f"We will use [magenta]{state}[/magenta]")
+        save_to = state
 
-    spec = ctx.obj["spec"]
+    state = (load_file(state, OperationState) or None,)
+    spec = (load_file(conf, ExecutionSpec, exc=True),)
     inputs = ctx.obj["inputs"]
     state = ctx.obj["state"]
     executor = Executor()

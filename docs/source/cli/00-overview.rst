@@ -35,9 +35,7 @@ Operation
 .........
 
 An *Operation* represents a unit of behavior that can be executed by
-Ox-Orch.
-
-Operations are declarative and serializable. Their configuration describes
+Ox-Orch. Operations are declarative and serializable. Their configuration describes
 what the operation should do, independently from a particular execution.
 
 Depending on the operation, it may perform actions such as:
@@ -53,6 +51,7 @@ multiple nested operations.
 
 The command line utility executes a root operation, which may itself contain
 an arbitrarily complex hierarchy of nested operations.
+
 
 State
 .....
@@ -80,6 +79,12 @@ operations.
 The resulting state is therefore a representation of the executed workflow,
 rather than merely a success or failure result.
 
+To list available states:
+
+.. code-block:: bash
+
+    ox-orch info states
+
 Execution
 .........
 
@@ -98,7 +103,6 @@ Configuration and execution context
 ...................................
 
 Ox-Orch distinguishes between operation configuration and execution input.
-
 The configuration of an operation describes the operation itself. Because
 operations are Pydantic models, this configuration must be serializable.
 
@@ -113,7 +117,6 @@ workflow definition.
 
 This separation allows workflows and their resulting states to remain
 serializable and portable.
-
 
 Lifecycle
 ---------
@@ -149,20 +152,23 @@ The command reference documents:
 - State handling;
 - Execution and rollback behavior.
 
-See :doc:`commands` for the complete command line reference.
+See :ref:`commands` for the complete command line reference.
 
 
 Available operations
---------------------
+....................
 
 The operations available to the command line utility depend on the installed
 Ox-Orch packages and integrations.
 
 You can list operations using:
 
-.. code-block:: shell
+.. code-block:: bash
 
     ox-orch info operations
+
+    # With informations and fields
+    ox-orch info operations --details # or -d
 
 Operations provide the actual behavior executed by a workflow. They may be
 generic Ox-Orch operations or operations provided by an integration.
@@ -177,16 +183,16 @@ For example, an integration may provide operations for:
 Operations can also be composed into plans in order to describe larger
 workflows.
 
-See :doc:`operations` for the list of available operations.
+See :ref:`cli-operations` for the list of available operations.
 
 Typical usage
--------------
+.............
 
 A typical workflow starts by applying an operation:
 
 .. code-block:: bash
 
-    $ ox-orch apply <configuration>
+    ox-orch run apply <configuration>
 
 During execution, Ox-Orch reports state changes produced by the operation and
 its nested operations.
@@ -198,17 +204,17 @@ A rollback follows the inverse lifecycle:
 
 .. code-block:: bash
 
-    $ ox-orch rollback <state>
+    ox-orch run rollback <configuration> <state>
 
 The exact arguments and available subcommands are documented in the
-:doc:`commands` section.
+:ref:`cli-commands` section.
 
 Next steps
 ----------
 
 To get started with the command line utility:
 
-1. Read :doc:`concepts` to understand the execution model;
-2. Read :doc:`commands` for the command line reference;
-3. Browse :doc:`operations` to discover available operations;
-4. See :doc:`examples` for complete workflow examples.
+1. Read :ref:`cli-concepts` to understand the execution model;
+2. Read :ref:`cli-commands` for the command line reference;
+3. Browse :ref:`cli-operations` to discover available operations;
+4. See :ref:`cli-examples` for complete workflow examples.

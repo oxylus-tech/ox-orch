@@ -81,6 +81,11 @@ class ContextInputs:
         - The class uses them to build the contexts;
         - Those contexts can then provided as input values to operations;
 
+    .. note::
+
+        To avoid name clashes with other arguments, all context values will
+        be postfixed with ``_ctx``.
+
     """
 
     inputs: RawContextInputs | ContextInputMap = None
@@ -105,11 +110,10 @@ class ContextInputs:
         This allows convenient formatting, without having to provide the
         polymorphic serialization format.
         """
-        if isinstance(inputs, dict):
-            for key, values in inputs.items():
-                if isinstance(values, dict):
-                    input_cls = self.registry.get(key)
-                    inputs[key] = input_cls.model_validate(values)
+        for key, values in inputs.items():
+            if isinstance(values, dict):
+                input_cls = self.registry.get(key)
+                inputs[key] = input_cls.model_validate(values)
         return inputs
 
     def build(self, reset: bool = False):
@@ -117,13 +121,17 @@ class ContextInputs:
         Build all contexts of provided inputs, skipping existing ones.
 
         :param reset: clear all previous contexts.
+        :return contexts.
         """
         if reset:
             self.contexts = {}
 
         for key in self.inputs.keys():
             if key not in self.contexts:
-                self.contexts[key] = self.build_context(key)
+                context = self.build_context(key)
+                # FIXME: remove postfix _ctx
+                norm_key = f"{key}_ctx" if not key.endswith("_ctx") else key
+                self.contexts[norm_key] = context
 
     def resolve(self, key: str) -> Context:
         """

@@ -20,10 +20,12 @@ class BaseFork(Operation):
     ** Read the doc of :py:meth:`ForkOperation` for more information. **
     """
 
-    operation: Operation
+    operation: Operation = Field(description="Operation to run in the new subprocess.")
     """ The operation to execute in the child process. """
-    queue_max_size: int = 64
-    """ Max size for a queue. """
+    queue_max_size: int = Field(
+        default=64, description="RPC queue max size. Change it only if you know what you are doing"
+    )
+    """ Max size for the MPC queue. """
 
     def run(self, method, state, args, kwargs) -> Generator[OperationState, None]:
         queue = Queue(maxsize=self.queue_max_size)
@@ -102,11 +104,6 @@ class ForkOperation(BaseFork, DelegateOperation):
 
     _label = "Fork"
     _description = "Spawn a new subprocess, and run the provided operation."
-
-    queue_max_size: int = Field(
-        default=64, description="RPC queue max size. Change it only if you know what you are doing"
-    )
-    """ Max size for a queue. """
 
     def create_state(self, **kwargs):
         if "child" not in kwargs:

@@ -55,6 +55,10 @@ class ShellMixin:
         """
         raise NotImplementedError
 
+    def get_run(self, shell):
+        """Return the shell run method to use."""
+        return shell
+
     def _apply(self, state, exec_ctx, **context):
         """Run forward command, as returned by :py:meth:`get_forward`."""
         cmd = self.get_forward(state, **context)
@@ -63,7 +67,7 @@ class ShellMixin:
 
             if not exec_ctx.run.dry_run:
                 shell = self._shell or exec_ctx.shell
-                shell.run(cmd)
+                self.get_run(shell)(cmd)
         else:
             self.log("No command to apply")
 
@@ -78,7 +82,7 @@ class ShellMixin:
             self.log("Run: {' '.join(cmd)}")
             if not exec_ctx.run.dry_run:
                 shell = self._shell or exec_ctx.shell
-                shell.run(cmd)
+                self.get_run(shell)(cmd)
         else:
             self.log("No command to apply")
 
@@ -101,8 +105,13 @@ class ShellOperation(ShellMixin, Operation):
 
     forward: list[str] | None = Field(default=None, description="Forward command, to run on apply.")
     backward: list[str] | None = Field(default=None, description="Backward command, to run on rollback")
+    is_python: bool = Field(default=False, description="Run as python command")
 
     # ---- command builders
+    def get_run(self, shell):
+        if self.is_python:
+            return shell.run_python
+        return shell.run
 
     def get_forward(self, state, **context) -> list[str]:
         """

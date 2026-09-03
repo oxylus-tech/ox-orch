@@ -11,12 +11,14 @@ We support three installation methods:
 To create virtual environment, you can use the ``venv:create`` operation.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
 from pydantic import Field
 
-from ox_orch.core import ChangeSet, register
+from ox_orch.core import ChangeSet, ContextInput, register
+from ox_orch.apps import AppRelease
 from .base import OperationState, Operation
 from .shell import ShellMixin
 
@@ -37,6 +39,23 @@ class InstallState(ChangeSet, OperationState):
     pass
 
 
+@dataclass
+class InstallContext:
+    """Context used to run install operation."""
+
+    packages: list[AppRelease]
+
+
+@register("install")
+class InstallContextInput(ContextInput):
+    packages: dict[str, str] = Field(description="The packages as a dict of package and version.")
+
+    def build_context(self, context_inputs, **kwargs) -> InstallContext:
+        return InstallContext(
+            packages=[AppRelease(id=name, package=name, version=version) for name, version in self.packages.items()]
+        )
+
+
 class InstallOperation(ShellMixin, Operation):
     """Install packages using pip.
 
@@ -51,12 +70,14 @@ class InstallOperation(ShellMixin, Operation):
     )
     __rollback_spec__ = ("exec_ctx",)
 
+    # TODO/FIXME: move to InstallContext
     update: bool = Field(default=True, description="Update packages")
     """ Update packages. """
     force_reinstall: bool = Field(default=False, description="Force package reinstallation.")
     """ Force reinstall. """
 
-    def _apply(self, state, exec_ctx, apps, **contexts):
+    def _apply(self, state, exec_ctx, install_ctx, **contexts):
+        apps = install_ctx.packages
         if not apps:
             return
 

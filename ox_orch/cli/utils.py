@@ -23,9 +23,7 @@ def get_file_backend(self, path: Path, model_class: Type[BaseModel], as_list: bo
     return backend_cls(model_class, as_list)
 
 
-def load_file(
-    self, path: Path, model_class: Type[BaseModel], as_list: bool = False, exc: bool = False
-) -> BaseModel | None:
+def load_file(path: Path, model_class: Type[BaseModel], as_list: bool = False, exc: bool = False) -> BaseModel | None:
     """
     Read file and return the deserialized object if file exists.
 
@@ -35,6 +33,9 @@ def load_file(
     :yields NotImplementedError: when no file backend matches file extension.
     :yields pydantic.ValidationError: invalid file content.
     """
+    if not path:
+        return None
+
     if not path.exists():
         if exc:
             raise ValueError(f"File {path} does not exists.")

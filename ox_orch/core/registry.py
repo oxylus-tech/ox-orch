@@ -141,9 +141,10 @@ class ModelInfo(BaseModel):
                     default=default,
                 )
             )
+
         return cls(
             type_id=model.__type_id__,
-            label=model._label or model.__type_id__,
+            label=getattr(model, "_label", None) or model.__type_id__,
             description=model._description,
             fields=fields,
         )
