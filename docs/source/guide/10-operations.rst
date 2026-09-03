@@ -28,6 +28,11 @@ You must distinct two kind of input for an operation:
 - *The context*: provides user inputs arguments among other contextual values used for apply/rollback (list of applications, application store, django project, etc.).
 
 
+.. note::
+
+    By convention, name of the operations reflect what it actually does, without custom postfix. For exemple, use ``PipInstall`` and not ``PipInstallOp``.
+
+
 Basic mechanisms of an operation
 --------------------------------
 
@@ -99,6 +104,20 @@ The overriden methods may also yield multiple state, for example when running ch
         for child in self.operations:
             child_st = child.create_state()
             yield from child.apply(state, **context)
+
+
+.. tip::
+
+    You certainly want to support dry-run executions. For this you can check on the :py:attr:`~ox_orch.core.contexts.RunContext.dry_run` attribute on ``exec_ctx.run`` provided to apply and rollback methods.
+
+    .. code-block:: python
+
+        def _apply(self, state, exec_ctx, **context):
+
+            print("Write it!")
+
+            if not exec_ctx.run.dry_run:
+                # perform write operation.
 
 
 Running
@@ -232,6 +251,7 @@ This ones add extra data that can be reused later to provide information, or aut
 - Providing the ``_label`` and ``_description`` attributes, describing the object model.
 - Assumes that documented fields are annotated using pydantic ``Field.description``.
 
+Take it as good practice to always document user's configurable fields and operations/state main information.
 
 
 Stores

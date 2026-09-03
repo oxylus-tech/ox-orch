@@ -175,8 +175,9 @@ class Store(ABC, Generic[K, V]):
         if isinstance(values, dict):
             values = values.items()
 
-        if isinstance(item, dict):
-            breakpoint()
+        # TODO: remove
+        # if isinstance(item, dict):
+        #     breakpoint()
 
         for field, value in values:
             setattr(item, field, value)
@@ -264,7 +265,9 @@ class FileStoreModel(PolymorphicModel, Generic[K, V]):
     """
 
     data: dict[Any, Any] = Field(default_factory=dict)
+    """ The actual data being stored. """
     metadata: StoreMetadata = Field(default_factory=StoreMetadata)
+    """ Store metadata. """
 
 
 class FileStore(MemoryStore[K, V]):
@@ -274,8 +277,15 @@ class FileStore(MemoryStore[K, V]):
     Serialization is delegated to FileBackend.
     """
 
+    path: Path
+    """ Path to file. """
     backend: FileBackend = JSONBackend(FileStoreModel)
+    """ File de-serialization backend (json, yaml, ...). """
     hydrate: bool = True
+    """
+    Ensure nested submodels are correctly deserialized when polymorphic
+    models are expected.
+    """
 
     def __init__(
         self,
@@ -289,7 +299,7 @@ class FileStore(MemoryStore[K, V]):
 
         if backend:
             self.backend = backend
-        self.path = path
+        self.path = Path(path)
 
         if not issubclass(self.backend.model_class, FileStoreModel):
             raise TypeError("File backend model class does not subclasses FileStoreModel")

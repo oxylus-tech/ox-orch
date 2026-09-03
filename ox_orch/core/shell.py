@@ -171,7 +171,11 @@ class LocalShell(Shell):
         return shell_result
 
 
-SHELL_REGISTRY = {
+SHELL_REGISTRY: dict[str, Shell] = {
     "echo": EchoShell,
     "local": LocalShell,
 }
+""" Register Shell subclasses by backend name.
+
+This is used to provide the actual shell class from a ShellSpec.
+"""

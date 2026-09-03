@@ -81,6 +81,8 @@ class Registry:
 
 
 class ModelFieldInfo(BaseModel):
+    """Information of a field."""
+
     name: str
     description: str = ""
     """ Human description of the field. """
@@ -97,7 +99,7 @@ class ModelFieldInfo(BaseModel):
 
 class ModelInfo(BaseModel):
     """
-    Provide information about a model that is registered to a :py:`DocumentedRegistry`.
+    Provide information about a model that is registered to a :py:class:`DocumentedRegistry`.
     """
 
     type_id: str
