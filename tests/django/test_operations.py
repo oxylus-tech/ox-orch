@@ -16,7 +16,7 @@ class TestDjangoEnable:
         op = DjangoEnable()
 
         assert not django_ctx.project.get_installed_apps()
-        op._apply(op.create_state(), apps_ctx=apps_ctx, django_ctx=django_ctx)
+        op._apply(op.create_state(), apps=apps_ctx, django_ctx=django_ctx)
         assert django_ctx.project.get_installed_apps() == [
             "django_app_2",
             "django_app_1",

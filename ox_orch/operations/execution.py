@@ -35,15 +35,17 @@ class ExecutionError(Exception):
     """
 
 
-# FIXME: later reuse the ContextInput mechanisms on the spec itself?
-@register("execution")
+@register("exec_ctx")
 class ExecutionSpec(ContextInput):
     """
     A full specification of an execution request.
 
-    It is used by the :py:class:`Executor` to
+    This is used to provide the :py:class:`Executor` all required information
+    about operation to run. It is mapped into an :py:class:`ExecutionContext`
+    that is passed down to the operations.
 
     This is the single source of truth for:
+
     - operation
     - state
     - context

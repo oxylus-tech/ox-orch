@@ -50,9 +50,9 @@ class AppContextInput(ContextInput):
     app: str = Field(description="Application id retrieved from app store")
 
     def build_context(self, context_inputs, **kwargs) -> AppContext:
-        apps_ctx = context_inputs.resolve("apps_ctx")
-        app = apps_ctx.store.get(self.app)
-        state = apps_ctx.state_store.get(self.app) or app.create_state()
+        apps = context_inputs.resolve("apps")
+        app = apps.store.get(self.app)
+        state = apps.state_store.get(self.app) or app.create_state()
         return AppContext(app=app, app_state=state)
 
 
@@ -114,7 +114,7 @@ class AppPlan(Plan):
     """
     Reconcile a Django application after package installation.
 
-    Nested operations will be run with ``app_ctx`` (instance of :py:class:`AppContext`).
+    Nested operations will be run with ``app`` context (instance of :py:class:`AppContext`).
     """
 
     __state_class__ = AppPlanState
@@ -131,14 +131,14 @@ class AppPlan(Plan):
             **kwargs,
         )
 
-    def get_context(self, state, apps_ctx, **context):
-        context["app_ctx"] = self.get_app_context(state, apps_ctx)
-        return super().get_context(state, apps_ctx=apps_ctx, **context)
+    def get_context(self, state, apps, **context):
+        context["app"] = self.get_app_context(state, apps)
+        return super().get_context(state, apps=apps, **context)
 
-    def get_app_context(self, state: AppPlanState, apps_ctx):
+    def get_app_context(self, state: AppPlanState, apps):
         return AppContext(
             app=self.app,
-            app_state=apps_ctx.state_store.get_or_create(self.app),
+            app_state=apps.state_store.get_or_create(self.app),
             app_plan=self,
             app_plan_state=state,
         )
@@ -166,7 +166,7 @@ class ReconciliationPlan(Plan):
     """
 
     __state_class__ = ReconciliationState
-    __apply_spec__ = ("apps_ctx",)
+    __apply_spec__ = ("apps",)
     __full_context__ = True
     _label = "Reconciliation Plan"
     _description = (
@@ -177,8 +177,8 @@ class ReconciliationPlan(Plan):
 
     app_plan: AppPlan = Field(description="The application plan to apply.")
 
-    def _apply(self, state, exec_ctx, apps_ctx: AppsContext, **context):
-        apps = apps_ctx.apps
+    def _apply(self, state, exec_ctx, apps: AppsContext, **context):
+        ctx, apps = apps, apps.apps
         if not apps:
             return
 
@@ -186,11 +186,11 @@ class ReconciliationPlan(Plan):
         ids = {app.id for app in apps}
 
         # Resolve dependencies
-        if store := apps_ctx.store:
+        if store := ctx.store:
             apps = store.resolve([a.ref for a in apps])
 
         # 1. Detect package version drift in environment.
-        dirty = self.get_dirty_apps(apps, apps_ctx.state_store)
+        dirty = self.get_dirty_apps(apps, ctx.state_store)
 
         if not apps:
             return
@@ -201,7 +201,7 @@ class ReconciliationPlan(Plan):
             op_state = op.create_state()
             state.children.append(op_state)
 
-            yield from op.apply(op_state, exec_ctx, app=app, apps_ctx=apps_ctx, **context)
+            yield from op.apply(op_state, exec_ctx, app=app, apps=ctx, **context)
 
         # 3. Collect registry update
         for op_state in state.children:
@@ -268,8 +268,8 @@ class AppsPlan(Plan):
 
     """
 
-    __apply_spec__ = {"apps_ctx": AppsContext}
-    __rollback_spec__ = {"apps_ctx": AppsContext}
+    __apply_spec__ = {"apps": AppsContext}
+    __rollback_spec__ = {"apps": AppsContext}
     __state_class__ = AppsState
     _label = "Applications Plan"
     _description = (
@@ -347,12 +347,12 @@ class AppsPlan(Plan):
             items.append(self.reconciliation)
         return items + self.operations
 
-    def _apply(self, state, exec_ctx, apps_ctx: AppsContext, **context):
-        context["install_ctx"] = InstallContext(packages=apps_ctx.apps)
+    def _apply(self, state, exec_ctx, apps: AppsContext, **context):
+        context["install"] = InstallContext(packages=apps.apps)
 
-        yield from super()._apply(state, exec_ctx, apps_ctx=apps_ctx, **context)
+        yield from super()._apply(state, exec_ctx, apps=apps, **context)
 
-        state_store = apps_ctx.state_store
+        state_store = apps.state_store
         state.merge_from(cs for cs in state.children if isinstance(cs, ChangeSet))
         app_states = {s.id: s for s in state_store.get_all(state.forward.keys())}
         for key, values in state.forward.items():
@@ -362,10 +362,10 @@ class AppsPlan(Plan):
             state_store.partial_commit(state.forward, allow_create=True, merge=True)
             state_store.save()
 
-    def _rollback(self, state, exec_ctx, apps_ctx: AppsContext, **context):
-        yield from super()._rollback(state, exec_ctx, apps_ctx=apps_ctx, **context)
+    def _rollback(self, state, exec_ctx, apps: AppsContext, **context):
+        yield from super()._rollback(state, exec_ctx, apps=apps, **context)
 
-        state_store = apps_ctx.state_store
+        state_store = apps.state_store
         if state.backward:
             state_store.partial_commit(state.backward, allow_create=True)
             state_store.save()

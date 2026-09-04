@@ -29,16 +29,16 @@ class AppStateFeatureTest(AppStateFeature):
 
 @pytest.fixture
 def op_feature_1():
-    def apply(state, *a, app_ctx, **kw):
-        app_ctx.app_plan_state.add_facts({"features": {"test-op-apps": {"value": 123}}})
+    def apply(state, *a, app, **kw):
+        app.app_plan_state.add_facts({"features": {"test-op-apps": {"value": 123}}})
 
     return RunPython(forward=apply, backward=lambda *a, **kw: None)
 
 
 @pytest.fixture
 def op_feature_2():
-    def apply(state, *a, app_ctx, **kw):
-        app_ctx.app_plan_state.add_facts({"features": {"test-op-apps": {"name": app_ctx.app.id}}})
+    def apply(state, *a, app, **kw):
+        app.app_plan_state.add_facts({"features": {"test-op-apps": {"name": app.app.id}}})
 
     return RunPython(forward=apply, backward=lambda *a, **kw: None)
 
@@ -84,7 +84,7 @@ def apps_plan_state(apps_plan):
 class TestAppContextInput:
     def test_build_context(self, context_inputs, apps_ctx, app_dep):
         input = AppContextInput(app=app_dep.id)
-        context_inputs.contexts["apps_ctx"] = apps_ctx
+        context_inputs.contexts["apps"] = apps_ctx
         ctx = input.build_context(context_inputs)
 
         assert ctx.app == app_dep
@@ -126,10 +126,10 @@ class TestAppPlan:
     def test_get_context(self, app_plan, app_meta, apps_ctx):
         state = app_plan.create_state()
         context = app_plan.get_context(state, apps_ctx)
-        assert context["app_ctx"].app == app_plan.app
-        assert isinstance(context["app_ctx"].app_state, AppState)
-        assert context["app_ctx"].app_plan == app_plan
-        assert context["app_ctx"].app_plan_state == state
+        assert context["app"].app == app_plan.app
+        assert isinstance(context["app"].app_state, AppState)
+        assert context["app"].app_plan == app_plan
+        assert context["app"].app_plan_state == state
 
 
 class TestReconciliationPlan:

@@ -6,6 +6,7 @@ from pydantic import Field
 
 from ox_orch.core import register, ContextInput
 from ox_orch.operations import Operation, OperationState, Plan, ShellOperation
+from ox_orch.operations.apps import AppsContext
 
 from .project import DjangoProject
 from .shell import ManageCommandShell
@@ -27,7 +28,7 @@ __all__ = (
 @dataclass
 class DjangoContext:
     """
-    This provide context information to run Django related operations.
+    This provides context information to run Django related operations.
     """
 
     project: DjangoProject
@@ -38,21 +39,25 @@ class DjangoContext:
     """ Path to the project. If not provided, assumes it is in current directory. """
 
     @classmethod
-    def from_apps_ctx(cls, apps_ctx, **kwargs):
+    def from_apps_ctx(cls, apps: AppsContext, **kwargs):
         """
         Create a new instance of the context, using apps context to init the
         django project instance.
         """
-        kwargs["project"] = DjangoProject(store=apps_ctx.store, state_store=apps_ctx.state_store)
+        kwargs["project"] = DjangoProject(store=apps.store, state_store=apps.state_store)
         return cls(**kwargs)
 
 
+@register("django")
 class DjangoContextInput(ContextInput):
+    __context_key__ = "django_ctx"
+    """ Avoid clash name with the django library. """
+
     project_path: Path
     settings_module: str
 
     def build_context(self, context_inputs, **kwargs) -> DjangoContext:
-        apps_ctx = context_inputs.resolve("apps_ctx")
+        apps_ctx = context_inputs.resolve("apps")
         return DjangoContext.from_apps_ctx(
             apps_ctx, settings_module=self.settings_module, project_path=self.project_path
         )
@@ -69,7 +74,7 @@ class DjangoEnable(Operation):
     enabling, you shall divide the target app in multiple python packages.
     """
 
-    __apply_spec__ = ("apps_ctx", "django_ctx")
+    __apply_spec__ = ("apps", "django_ctx")
     _label = "Django: enable applications"
     _description = (
         "Enable the applications in the Django project (using DjangoProject).\n"
@@ -77,12 +82,12 @@ class DjangoEnable(Operation):
         "for more info."
     )
 
-    def _apply(self, state, *_, apps_ctx, django_ctx, **__):
-        django_ctx.project.enable(apps_ctx.apps)
+    def _apply(self, state, *_, apps, django_ctx, **__):
+        django_ctx.project.enable(apps.apps)
         django_ctx.project.sync_installed_apps()
 
-    def _rollback(self, state, *_, apps_ctx, django_ctx, **__):
-        django_ctx.project.disable(apps_ctx.apps)
+    def _rollback(self, state, *_, apps, django_ctx, **__):
+        django_ctx.project.disable(apps.apps)
         django_ctx.project.sync_installed_apps()
 
     # Rollback is handled by upstream state restoration.

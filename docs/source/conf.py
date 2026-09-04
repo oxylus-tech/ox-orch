@@ -39,6 +39,7 @@ exclude_patterns = []
 
 autodoc_default_options = {
     "private-members": True,
+    "member-order": "groupwise",
 }
 
 autosummary_generate = True

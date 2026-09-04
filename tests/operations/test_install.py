@@ -43,7 +43,7 @@ class TestInstallOperation:
             ]
         )
 
-        op._apply(state, exec_ctx, shell=EchoShell(), install_ctx=install_ctx)
+        op._apply(state, exec_ctx, shell=EchoShell(), install=install_ctx)
 
         assert "a" in state.backward
         assert "b" in state.backward

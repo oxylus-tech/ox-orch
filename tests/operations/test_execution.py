@@ -63,14 +63,14 @@ class TestExecutor:
         assert result.run_context is not None
 
     def test_apply_with_inputs(self, executor, operation, state, a_input):
-        def _apply(self, state, ctx=None, test_a_input=None, **_):
-            state._value = test_a_input.value
+        def _apply(self, state, ctx=None, test_str_input=None, **_):
+            state._value = test_str_input.value
             yield state
 
         operation._apply = _apply.__get__(operation, FakeOperation)
         spec = ExecutionSpec(operation=operation)
 
-        inputs = {"test_a_input": a_input}
+        inputs = {"test_str_input": a_input}
         state = executor.apply_sync(spec, inputs=inputs)
         assert state._value == "a"
 

@@ -34,7 +34,7 @@ class TestDjango:
     ):
         db_path.unlink(missing_ok=True)
 
-        context = {"apps_ctx": apps_ctx, "django_ctx": django_ctx}
+        context = {"apps": apps_ctx, "django_ctx": django_ctx}
         django_project.disable(apps_ctx.apps)
 
         spec = make_spec(d_app_plan)

@@ -48,7 +48,7 @@ class InstallContext:
 
 @register("install")
 class InstallContextInput(ContextInput):
-    packages: dict[str, str] = Field(description="The packages as a dict of package and version.")
+    packages: dict[str, str | AppRelease] = Field(description="The packages as a dict of package and version.")
 
     def build_context(self, context_inputs, **kwargs) -> InstallContext:
         return InstallContext(
@@ -66,7 +66,7 @@ class InstallOperation(ShellMixin, Operation):
     __state_class__ = InstallState
     __apply_spec__ = (
         "exec_ctx",
-        "apps",
+        "install",
     )
     __rollback_spec__ = ("exec_ctx",)
 
@@ -76,8 +76,8 @@ class InstallOperation(ShellMixin, Operation):
     force_reinstall: bool = Field(default=False, description="Force package reinstallation.")
     """ Force reinstall. """
 
-    def _apply(self, state, exec_ctx, install_ctx, **contexts):
-        apps = install_ctx.packages
+    def _apply(self, state, exec_ctx, install, **contexts):
+        apps = install.packages
         if not apps:
             return
 
