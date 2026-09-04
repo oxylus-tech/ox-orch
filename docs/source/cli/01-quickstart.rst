@@ -76,6 +76,7 @@ You can also provide extra input arguments using the ``--input/-i`` argument:
 
     ox-orch run -i "{\"install\":{\"packages\":{\"httpx\":\"0.28.1\"}}}" apply hello.yaml
 
+
 States
 ------
 
@@ -101,3 +102,29 @@ This file thus can be reused to ``rollback`` command. Later it is planned to all
 .. code-block:: bash
 
     ox-orch run -S rollback_state.json -c context.yaml rollback install.yaml state.json
+
+
+Extend ox-orch
+--------------
+
+You can provide the ox-orch command external and custom operations and code. There are two ways to do so, first one is to pass it as ``--module/-m`` CLI argument:
+
+.. code-block:: bash
+
+    ox-orch -m "ox_orch.django" run -c context.yaml apply install.yaml
+
+The second option is to set the execution spec attribute :py:attr:`~ox_orch.operations.execution.ExecutionSpec.modules`:
+
+.. code-block:: yaml
+
+    name: Django Install
+    operation:
+      __type_id__: apps
+      install: install:uv
+      operations:
+      - __type_id__: django:enable
+      - __type_id__: django:reconciliation
+    modules:
+    - ox_orch.django
+
+Note that this example is not fully complete and might not work as you expect it. Please read the :ref:`guide page related to django <cli-django>`

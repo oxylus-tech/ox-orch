@@ -32,7 +32,7 @@ class DummyInstall(InstallOperation):
 
 
 class TestInstallOperation:
-    def test_apply_snapshots_and_calls_install(self, exec_ctx):
+    def test_apply_snapshots_and_calls_install(self, execution):
         op = DummyInstall()
 
         state = InstallState()
@@ -43,7 +43,7 @@ class TestInstallOperation:
             ]
         )
 
-        op._apply(state, exec_ctx, shell=EchoShell(), install=install_ctx)
+        op._apply(state, execution, shell=EchoShell(), install=install_ctx)
 
         assert "a" in state.backward
         assert "b" in state.backward
@@ -52,7 +52,7 @@ class TestInstallOperation:
         assert installed[0] == {"package": "pkg_a", "source": "pkg_a", "version": "1.0"}
         assert installed[1] == {"package": "pkg_b", "source": "pkg_b", "version": "2.0"}
 
-    def test_rollback_downgrade_and_uninstall(self, exec_ctx):
+    def test_rollback_downgrade_and_uninstall(self, execution):
         op = DummyInstall()
 
         state = InstallState()
@@ -61,7 +61,7 @@ class TestInstallOperation:
             "b": {"package": "b", "source": "b", "version": None},
         }
 
-        op._rollback(state, exec_ctx, shell=EchoShell())
+        op._rollback(state, execution, shell=EchoShell())
 
         # uninstall case
         assert op._last_uninstall == ["b"]

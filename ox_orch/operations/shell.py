@@ -59,14 +59,14 @@ class ShellMixin:
         """Return the shell run method to use."""
         return shell
 
-    def _apply(self, state, exec_ctx, **context):
+    def _apply(self, state, execution, **context):
         """Run forward command, as returned by :py:meth:`get_forward`."""
         cmd = self.get_forward(state, **context)
         if cmd:
             self.log("Run: {' '.join(cmd)}")
 
-            if not exec_ctx.run.dry_run:
-                shell = self._shell or exec_ctx.shell
+            if not execution.run.dry_run:
+                shell = self._shell or execution.shell
                 self.get_run(shell)(cmd)
         else:
             self.log("No command to apply")
@@ -74,14 +74,14 @@ class ShellMixin:
         if isinstance(state, ShellState):
             state.forward_cmd = cmd
 
-    def _rollback(self, state, exec_ctx, **context):
+    def _rollback(self, state, execution, **context):
         """Run forward command, as returned by :py:meth:`get_backward`."""
         cmd = self.get_backward(state, **context)
 
         if cmd:
             self.log("Run: {' '.join(cmd)}")
-            if not exec_ctx.run.dry_run:
-                shell = self._shell or exec_ctx.shell
+            if not execution.run.dry_run:
+                shell = self._shell or execution.shell
                 self.get_run(shell)(cmd)
         else:
             self.log("No command to apply")

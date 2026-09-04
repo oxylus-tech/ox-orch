@@ -29,7 +29,7 @@ An Application is the representation of an installable/installed package in ox-o
 
 - :py:class:`~ox_orch.apps.app.Application.package` / :py:class:`~ox_orch.apps.app.Application.source`: when a source is provided use it a installation source;
 - :py:class:`~ox_orch.apps.app.Application.releases`: an application can contains multiple releases;
-- :py:class:`~ox_orch.apps.app.Application.dependencies` to other applications that may differ from the python package one. The application store can resolve application dependency tree and sort it topologically.
+- :py:class:`~ox_orch.apps.app.Application.dependencies` to other applications that may differ from the python package one. The application store can resolve application dependency tree and sort it topologically. It is for example really usefull to ensure django applications dependencies.
 
 
 .. note::

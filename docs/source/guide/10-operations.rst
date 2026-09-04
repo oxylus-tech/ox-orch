@@ -108,15 +108,15 @@ The overriden methods may also yield multiple state, for example when running ch
 
 .. tip::
 
-    You certainly want to support dry-run executions. For this you can check on the :py:attr:`~ox_orch.core.contexts.RunContext.dry_run` attribute on ``exec_ctx.run`` provided to apply and rollback methods.
+    You certainly want to support dry-run executions. For this you can check on the :py:attr:`~ox_orch.core.contexts.RunContext.dry_run` attribute on ``execution.run`` provided to apply and rollback methods.
 
     .. code-block:: python
 
-        def _apply(self, state, exec_ctx, **context):
+        def _apply(self, state, execution, **context):
 
             print("Write it!")
 
-            if not exec_ctx.run.dry_run:
+            if not execution.run.dry_run:
                 # perform write operation.
 
 

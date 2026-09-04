@@ -73,7 +73,7 @@ __all__ = (
 def apply(
     operation: Operation,
     state: OperationState,
-    exec_ctx: ExecutionContext | None = None,
+    execution: ExecutionContext | None = None,
     # state_backend: Optional[StateBackend] = None,
     **kwargs
 ) -> Generator[OperationState, None, None]:
@@ -81,12 +81,12 @@ def apply(
     Apply operation saving state at each change and handling rolling back on error.
 
     :param operation: the actual operation to apply.
-    :param exec_ctx: execution context.
+    :param execution: execution context.
     :param state_backend: the state backend used to load and store the operation's state.
     :param **kwargs: arguments passed to the operation.
     """
-    exec_ctx = exec_ctx or ExecutionContext()
-    for state_ in operation.apply(state, exec_ctx, **kwargs):
+    execution = execution or ExecutionContext()
+    for state_ in operation.apply(state, execution, **kwargs):
         # state_backend and state_backend.save(state_)
         yield state
 
@@ -94,7 +94,7 @@ def apply(
 def rollback(
     operation: Operation,
     state: OperationState,
-    exec_ctx: ExecutionContext | None = None,
+    execution: ExecutionContext | None = None,
     # state_backend: Optional[StateBackend] = None,
     **kwargs
 ) -> Generator[OperationState, None, None]:
@@ -102,12 +102,12 @@ def rollback(
     Apply operation saving state at each change and handling rolling back on error.
 
     :param operation: the actual operation to apply.
-    :param exec_ctx: execution context.
+    :param execution: execution context.
     :param state_backend: the state backend used to load and store the operation's state.
     :param **kwargs: arguments passed to the operation.
     """
-    exec_ctx = exec_ctx or ExecutionContext()
-    for state_ in operation.rollback(state, exec_ctx, **kwargs):
+    execution = execution or ExecutionContext()
+    for state_ in operation.rollback(state, execution, **kwargs):
         # state_backend and state_backend.save(state_)
         yield state
 

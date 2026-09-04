@@ -199,7 +199,7 @@ def app_state_store(app_dep_1):
 
 
 @pytest.fixture
-def exec_ctx():
+def execution():
     return ExecutionContext()
 
 

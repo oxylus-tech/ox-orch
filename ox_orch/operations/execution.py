@@ -35,7 +35,7 @@ class ExecutionError(Exception):
     """
 
 
-@register("exec_ctx")
+@register("execution")
 class ExecutionSpec(ContextInput):
     """
     A full specification of an execution request.
@@ -128,6 +128,7 @@ class Executor(HookEmitter):
     hook_class = ExecutorHook
     hook_registry = EXECUTOR_HOOK_REGISTRY
 
+    # TODO: later make "spec" optional as it may be provided through inputs
     def apply(
         self, spec: ExecutionSpec, inputs: RawContextInputs | None = None, **contexts: dict[str, ContextInput]
     ) -> Generator[State, State]:
@@ -144,7 +145,7 @@ class Executor(HookEmitter):
         run_context = spec.get_run_context()
         ctx = spec.build_context()
 
-        contexts["exec_ctx"] = ctx
+        contexts["execution"] = ctx
         context_inputs = ContextInputs(inputs=inputs, contexts=contexts)
         context_inputs.build()
         operation = spec.operation
@@ -194,7 +195,7 @@ class Executor(HookEmitter):
 
         ctx = spec.build_context(run=state.run_context)
 
-        contexts["exec_ctx"] = ctx
+        contexts["execution"] = ctx
         context_inputs = ContextInputs(inputs=inputs, contexts=contexts)
         context_inputs.build()
         operation = spec.operation

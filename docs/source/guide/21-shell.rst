@@ -17,9 +17,9 @@ So how does it work?
     from ox_orch.operations import Operation
 
     class PrintHello(Operation):
-        def _apply(self, state, exec_ctx, **context):
+        def _apply(self, state, execution, **context):
             """ Just call the echo command. """
-            exec_ctx.shell.run(["echo", f"Hello this is {state.operation_id}"])
+            execution.shell.run(["echo", f"Hello this is {state.operation_id}"])
 
 Some usefull Shell methods:
 

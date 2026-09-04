@@ -65,10 +65,10 @@ class InstallOperation(ShellMixin, Operation):
 
     __state_class__ = InstallState
     __apply_spec__ = (
-        "exec_ctx",
+        "execution",
         "install",
     )
-    __rollback_spec__ = ("exec_ctx",)
+    __rollback_spec__ = ("execution",)
 
     # TODO/FIXME: move to InstallContext
     update: bool = Field(default=True, description="Update packages")
@@ -76,7 +76,7 @@ class InstallOperation(ShellMixin, Operation):
     force_reinstall: bool = Field(default=False, description="Force package reinstallation.")
     """ Force reinstall. """
 
-    def _apply(self, state, exec_ctx, install, **contexts):
+    def _apply(self, state, execution, install, **contexts):
         apps = install.packages
         if not apps:
             return
@@ -91,21 +91,21 @@ class InstallOperation(ShellMixin, Operation):
         if contexts.get("dry_run"):
             state.forward = apps_req
         else:
-            self.install(state, exec_ctx.shell, apps_req.values(), options=options)
+            self.install(state, execution.shell, apps_req.values(), options=options)
             state.forward = self._snapshot(apps)
 
-    def _rollback(self, state, exec_ctx, **contexts):
+    def _rollback(self, state, execution, **contexts):
         downgrade = [values for values in state.backward.values() if values.get("version") is not None]
         self.log("Downgrade to:\n" + "\n".join(f"- {vals['package']} @ {vals['version']}" for vals in downgrade))
 
         if not contexts.get("dry_run") and downgrade:
-            self.install(state, exec_ctx.shell, downgrade)
+            self.install(state, execution.shell, downgrade)
 
         uninstall = [values["package"] for values in state.backward.values() if values.get("version") is None]
         self.log("Remove:\n" + "\n".join(f"- {key}" for key in uninstall))
 
         if not contexts.get("dry_run") and uninstall:
-            self.uninstall(state, exec_ctx.shell, uninstall)
+            self.uninstall(state, execution.shell, uninstall)
 
     def get_install_options(self):
         """Build CLI option for installation (forward only)."""
@@ -215,12 +215,12 @@ class CheckPackageInstalled(Operation):
 
     packages: list[str]
 
-    def _apply(self, state: CheckPackageInstalledState, exec_ctx, **_):
+    def _apply(self, state: CheckPackageInstalledState, execution, **_):
         """
         Uses the shell runtime (venv-aware) to check installation.
         """
         for package in self.packages:
-            result = exec_ctx.shell.run(
+            result = execution.shell.run(
                 ["python", "-m", "pip", "show", package],
             )
             if result.returncode == 0:

@@ -140,22 +140,22 @@ class Operation(PolymorphicModel, DocumentedClass):
             **kwargs,
         )
 
-    def apply(self, state: OperationState, exec_ctx, **context) -> Generator[OperationState]:
+    def apply(self, state: OperationState, execution, **context) -> Generator[OperationState]:
         """
         Apply operation, ensuring state update.
 
         On failure, it will set state on failure if not yet rolled-back.
 
         :param state: state used for reporting this operation's status;
-        :param exec_ctx: ExecutionContext
+        :param execution: ExecutionContext
         :param **context: extra context arguments passed by the caller;
         """
         try:
             self.validate_state(state)
-            context = self.get_context(state, exec_ctx=exec_ctx, **context)
+            context = self.get_context(state, execution=execution, **context)
             context = self._resolve_apply_context(context)
 
-            if exec_ctx.run.dry_run:
+            if execution.run.dry_run:
                 self.log("Apply in dry run mode")
 
             yield state.start()
@@ -171,20 +171,20 @@ class Operation(PolymorphicModel, DocumentedClass):
                 yield state.fail(exc)
             raise
 
-    def rollback(self, state: OperationState, exec_ctx, **context) -> Generator[OperationState]:
+    def rollback(self, state: OperationState, execution, **context) -> Generator[OperationState]:
         """
         Rollback operation, ensuring state update.
 
         :param state: state used for reporting this operation's status;
-        :param exec_ctx: ExecutionContext
+        :param execution: ExecutionContext
         :param **context: extra context arguments passed by the caller;
         """
         try:
             self.validate_state(state)
-            context = self.get_context(state, exec_ctx=exec_ctx, **context)
+            context = self.get_context(state, execution=execution, **context)
             context = self._resolve_rollback_context(context)
 
-            if exec_ctx.run.dry_run:
+            if execution.run.dry_run:
                 self.log("Rollback in dry run mode")
 
             yield state.rolling_back()
@@ -218,15 +218,15 @@ class Operation(PolymorphicModel, DocumentedClass):
 
     def get_context(self, state, **context):
         """Return context to provide to _apply and _rollback methods."""
-        if exec_ctx := context.get("exec_ctx"):
-            context.setdefault("dry_run", exec_ctx.spec and exec_ctx.spec.dry_run)
+        if execution := context.get("execution"):
+            context.setdefault("dry_run", execution.spec and execution.spec.dry_run)
         return context
 
-    def _apply(self, state, exec_ctx, **context):
+    def _apply(self, state, execution, **context):
         """Where you put the actual code for applying the operation."""
         pass
 
-    def _rollback(self, state, exec_ctx, **context):
+    def _rollback(self, state, execution, **context):
         """Where you put the actual code for applying the operation's rollback."""
         pass
 

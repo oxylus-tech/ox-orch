@@ -12,7 +12,7 @@ Basically:
     - Ensure context initialization and run the operation.
     - Emit event to registered hooks at different stages (see :py:mod:`ox_orch.hooks`).
     - Run the operation yielding back operation states;
-- :py:class:`~ox_orch.operations.execution.ExecutionContext` will be provided as ``exec_ctx`` context value;
+- :py:class:`~ox_orch.operations.execution.ExecutionContext` will be provided as ``execution`` context value;
 
 .. image:: ../static/guide-execution.png
 

@@ -19,13 +19,13 @@ class FakeOperation(Operation):
     fail_apply: bool = False
     fail_rollback: bool = False
 
-    def _apply(self, state, exec_ctx, **context):
+    def _apply(self, state, execution, **context):
         if self.fail_apply:
             raise RuntimeError("apply failed")
         self.applied = True
         yield state
 
-    def _rollback(self, state, exec_ctx, **context):
+    def _rollback(self, state, execution, **context):
         if self.fail_rollback:
             raise RuntimeError("rollback failed")
         self.rolled_back = True

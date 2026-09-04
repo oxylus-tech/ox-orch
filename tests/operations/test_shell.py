@@ -39,19 +39,19 @@ class TestShellMixin:
         def run(self, args):
             self.run_calls.append(args)
 
-    def test_apply_sets_forward_command(self, exec_ctx, mock_run):
+    def test_apply_sets_forward_command(self, execution, mock_run):
         op = DummyOp()
         state = ShellState()
 
-        op._apply(state, exec_ctx, shell=EchoShell())
+        op._apply(state, execution, shell=EchoShell())
         # mock_run.assert_called_once_with(["echo", "forward"], check=True, stdout=None, stderr=None)
         assert state.forward_cmd == ["echo", "forward"]
 
-    def test_rollback_sets_backward_command(self, exec_ctx, mock_run):
+    def test_rollback_sets_backward_command(self, execution, mock_run):
         op = DummyOp()
         state = ShellState()
 
-        op._rollback(state, exec_ctx, shell=EchoShell())
+        op._rollback(state, execution, shell=EchoShell())
         # mock_run.assert_called_once_with(["echo", "backward"], check=True, stdout=None, stderr=None)
         assert state.backward_cmd == ["echo", "backward"]
 

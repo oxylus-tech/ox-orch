@@ -71,7 +71,7 @@ class Plan(Operation):
     def validate_operations(cls, v):
         return [Operation.model_validate(op) if isinstance(op, dict) and "__type__" in op else op for op in v]
 
-    def _apply(self, state, exec_ctx, **context) -> Generator[OperationState]:
+    def _apply(self, state, execution, **context) -> Generator[OperationState]:
         """
         Execute nested operations.
 
@@ -109,9 +109,9 @@ class Plan(Operation):
                 op_state = op.create_state()
                 state.children.append(op_state)
 
-            yield from op.apply(op_state, exec_ctx, **context)
+            yield from op.apply(op_state, execution, **context)
 
-    def _rollback(self, state, exec_ctx, **context) -> Generator[OperationState]:
+    def _rollback(self, state, execution, **context) -> Generator[OperationState]:
         """
         Execute rollbacks for applied operations (in reverse order).
 
@@ -141,7 +141,7 @@ class Plan(Operation):
 
         for op, op_state in zip(reversed(operations), reversed(states)):
             if op_state.is_any(Status.COMPLETED, Status.RUNNING, Status.FAILED):
-                yield from op.rollback(op_state, exec_ctx, **context)
+                yield from op.rollback(op_state, execution, **context)
 
     def get_context(self, state, **context):
         context["plan"] = self

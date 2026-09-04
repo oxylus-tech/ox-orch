@@ -11,7 +11,7 @@ __all__ = ("cli",)
 
 
 @click.group()
-@click.option("--module", "modules", multiple=True, help="Import module registering operations and hooks.")
+@click.option("--module", "-m", "modules", multiple=True, help="Import module registering operations and hooks.")
 @click.pass_context
 def cli(ctx, modules):
     load_modules(modules)

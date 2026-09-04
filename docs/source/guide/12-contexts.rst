@@ -104,13 +104,13 @@ The two first attributes may have one of the following forms:
         __apply_spec__ = {
             # Either None or int
             "my_ctx": (MyContext, None|int),
-            "exec_ctx": ExecutionContext
+            "execution": ExecutionContext
         }
         # For the sake of example
         __rollback_spec__ = None
 
 
-        def _apply(self, state, exec_ctx=None, my_ctx=None):
+        def _apply(self, state, execution=None, my_ctx=None):
             pass
 
 
@@ -118,11 +118,11 @@ The two first attributes may have one of the following forms:
     state = op.create_state()
 
     # This works:
-    op.apply(state, exec_ctx=ExecutionContext(), name="Alice")
-    op.apply(state, exec_ctx=ExecutionContext(), my_ctx=123)
+    op.apply(state, execution=ExecutionContext(), name="Alice")
+    op.apply(state, execution=ExecutionContext(), my_ctx=123)
 
     # The followings raise ValueError:
-    op.apply(state, exec_ctx=123)
+    op.apply(state, execution=123)
     op.apply(state)
 
 
@@ -131,11 +131,11 @@ When ``__full_context__=True``, all context values will be passed down:
 .. code-block:: python
 
     class MyOperation(Operation):
-        __apply_spec__ = ["my_ctx", "exec_ctx"]
+        __apply_spec__ = ["my_ctx", "execution"]
         __full_context__ = True
 
         # Notice "**kwargs"
-        def _apply(self, state, exec_ctx=None, my_ctx=None, **kwargs):
+        def _apply(self, state, execution=None, my_ctx=None, **kwargs):
             pass
 
 This attribute is used for example when you have nested children operation but you want
