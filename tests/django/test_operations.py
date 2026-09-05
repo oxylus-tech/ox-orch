@@ -4,20 +4,13 @@ from ox_orch.operations import Operation
 from ox_orch.django.operations import DjangoEnable, DjangoSetup, Migrate, DjangoProjectSync
 
 
-class TestDjangoContext:
-    def test_from_apps_ctx(self, django_ctx, apps_ctx):
-        # already initialized using from_apps_ctx
-        assert django_ctx.project.store is apps_ctx.store
-        assert django_ctx.project.state_store is apps_ctx.state_store
-
-
 class TestDjangoEnable:
     def test__apply(self, apps_ctx, django_ctx, d_app_1):
         op = DjangoEnable()
 
-        assert not django_ctx.project.get_installed_apps()
+        assert not django_ctx.apps.get_installed_apps()
         op._apply(op.create_state(), apps=apps_ctx, django_ctx=django_ctx)
-        assert django_ctx.project.get_installed_apps() == [
+        assert django_ctx.apps.get_installed_apps() == [
             "django_app_2",
             "django_app_1",
         ]

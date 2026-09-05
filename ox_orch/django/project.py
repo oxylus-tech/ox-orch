@@ -8,7 +8,7 @@ from ox_orch.core import register
 from ox_orch.apps import Application, AppFeature, AppStore, AppStateFeature, AppStateStore, AppStateStoreFeature
 
 
-__all__ = ("DjangoAppFeature", "DjangoStateFeature", "DjangoStateStoreFeature", "DjangoProject")
+__all__ = ("DjangoAppFeature", "DjangoStateFeature", "DjangoStateStoreFeature", "DjangoProject", "DjangoApps")
 
 
 @register("django")
@@ -43,7 +43,6 @@ class DjangoStateStoreFeature(AppStateStoreFeature):
     """
 
 
-@dataclass
 class DjangoProject:
     """
     Represent a django project.
@@ -51,9 +50,6 @@ class DjangoProject:
     This class can be used by the django project to retrieve relevant information
     as enabled applications.
     """
-
-    state_store: AppStateStore
-    store: AppStore | None = None
 
     def setup(self, settings_module: str, project_path: Path | None = None):
         """
@@ -71,6 +67,55 @@ class DjangoProject:
 
         os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
         django.setup()
+
+    # ---- Migrations
+    def get_applied_migrations(self) -> dict[str, list[str]]:
+        """Get a snapshot of migrations."""
+        executor = self.get_migration_executor()
+        result = defaultdict(list)
+
+        for app_label, migration_name in executor.loader.applied_migrations:
+            result[app_label].append(migration_name)
+
+        return dict(result)
+
+    def restore_migrations(self, snapshot):
+        executor = self.get_migration_executor()
+        current = self.get_applied_migrations()
+
+        targets = {}
+        for app_label in executor.loader.migrated_apps:
+            current_list = current.get(app_label, [])
+            snapshot_list = snapshot.get(app_label, [])
+
+            if len(current_list) <= len(snapshot_list):
+                continue
+
+            if snapshot_list:
+                targets[app_label] = snapshot_list[-1]
+            else:
+                targets[app_label] = None
+
+        if targets:
+            executor.migrate(targets.items())
+
+    def get_migration_executor(self):
+        """Return migration executor."""
+        from django.db import connections
+        from django.db.migrations.executor import MigrationExecutor
+
+        return MigrationExecutor(connections["default"])
+
+
+@dataclass
+class DjangoApps:
+    """
+    This class manage application enabling and disabling on a Django project.
+    """
+
+    state_store: AppStateStore
+    store: AppStore | None = None
+    project: DjangoProject = DjangoProject()
 
     def get_feature(self) -> DjangoStateStoreFeature:
         """Get or create django feature."""
@@ -153,44 +198,6 @@ class DjangoProject:
         feature.installed_apps = installed_apps
 
         self.state_store.save()
-
-    # ---- Migrations
-    def get_applied_migrations(self) -> dict[str, list[str]]:
-        """Get a snapshot of migrations."""
-        executor = self.get_migration_executor()
-        result = defaultdict(list)
-
-        for app_label, migration_name in executor.loader.applied_migrations:
-            result[app_label].append(migration_name)
-
-        return dict(result)
-
-    def restore_migrations(self, snapshot):
-        executor = self.get_migration_executor()
-        current = self.get_applied_migrations()
-
-        targets = {}
-        for app_label in executor.loader.migrated_apps:
-            current_list = current.get(app_label, [])
-            snapshot_list = snapshot.get(app_label, [])
-
-            if len(current_list) <= len(snapshot_list):
-                continue
-
-            if snapshot_list:
-                targets[app_label] = snapshot_list[-1]
-            else:
-                targets[app_label] = None
-
-        if targets:
-            executor.migrate(targets.items())
-
-    def get_migration_executor(self):
-        """Return migration executor."""
-        from django.db import connections
-        from django.db.migrations.executor import MigrationExecutor
-
-        return MigrationExecutor(connections["default"])
 
     def _assert_has_store(self):
         if self.store is None:

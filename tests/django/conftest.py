@@ -3,7 +3,7 @@ import sys
 import pytest
 
 from ox_orch.apps import Application, AppMemoryStore, AppStateFileStore
-from ox_orch.django import DjangoProject, DjangoAppFeature, DjangoContext
+from ox_orch.django import DjangoProject, DjangoApps, DjangoAppFeature, DjangoContext
 from ox_orch.operations import AppsContext
 
 
@@ -53,20 +53,25 @@ def app_state_store(project_path):
 
 
 @pytest.fixture
-def django_project(app_store, app_state_store):
-    return DjangoProject(store=app_store, state_store=app_state_store)
+def django_project():
+    return DjangoProject()
 
 
 @pytest.fixture
-def db_path(django_project):
-    return django_project.state_store.path.parent / "db.sqlite3"
+def django_apps(django_project, app_store, app_state_store):
+    return DjangoApps(project=django_project, store=app_store, state_store=app_state_store)
+
+
+@pytest.fixture
+def db_path(django_apps):
+    return django_apps.state_store.path.parent / "db.sqlite3"
 
 
 _is_setup = False
 
 
 @pytest.fixture
-def setup_project(django_project, project_path, project_settings, db_path, d_app_1, d_app_2):
+def setup_project(django_project, django_apps, project_path, project_settings, db_path, d_app_1, d_app_2):
     global _is_setup
     if not _is_setup:
         db_path.unlink(missing_ok=True)
@@ -77,8 +82,8 @@ def setup_project(django_project, project_path, project_settings, db_path, d_app
             f"{d_app_2.source}/src",
         ] + sys.path
 
-        django_project.enable([d_app_1, d_app_2])
-        django_project.sync_installed_apps()
+        django_apps.enable([d_app_1, d_app_2])
+        django_apps.sync_installed_apps()
         django_project.setup(project_settings, project_path)
 
         yield django_project
@@ -96,9 +101,10 @@ def apps_ctx(app_store, app_state_store, d_app_1, d_app_2):
 
 
 @pytest.fixture
-def django_ctx(apps_ctx, project_path, project_settings):
-    return DjangoContext.from_apps_ctx(
-        apps_ctx,
+def django_ctx(django_apps, apps_ctx, project_path, project_settings):
+    return DjangoContext(
+        project=django_apps.project,
+        apps=django_apps,
         settings_module=project_settings,
         project_path=project_path,
     )

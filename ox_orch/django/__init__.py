@@ -41,7 +41,7 @@ Django settings. Typical workflow:
 
 """
 
-from .project import DjangoAppFeature, DjangoStateFeature, DjangoStateStoreFeature, DjangoProject
+from .project import DjangoAppFeature, DjangoStateFeature, DjangoStateStoreFeature, DjangoProject, DjangoApps
 from .operations import (
     DjangoContext,
     DjangoEnable,
@@ -60,6 +60,7 @@ __all__ = (
     "DjangoStateFeature",
     "DjangoStateStoreFeature",
     "DjangoProject",
+    "DjangoApps",
     "DjangoContext",
     "DjangoEnable",
     "DjangoSetup",

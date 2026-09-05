@@ -6,9 +6,8 @@ from pydantic import Field
 
 from ox_orch.core import register, ContextInput
 from ox_orch.operations import Operation, OperationState, Plan, ShellOperation
-from ox_orch.operations.apps import AppsContext
 
-from .project import DjangoProject
+from .project import DjangoProject, DjangoApps
 from .shell import ManageCommandShell
 
 
@@ -37,15 +36,8 @@ class DjangoContext:
     """ Path to the settings. """
     project_path: Path | None = None
     """ Path to the project. If not provided, assumes it is in current directory. """
-
-    @classmethod
-    def from_apps_ctx(cls, apps: AppsContext, **kwargs):
-        """
-        Create a new instance of the context, using apps context to init the
-        django project instance.
-        """
-        kwargs["project"] = DjangoProject(store=apps.store, state_store=apps.state_store)
-        return cls(**kwargs)
+    apps: DjangoApps | None = None
+    """ Django application manager. """
 
 
 @register("django")
@@ -57,9 +49,17 @@ class DjangoContextInput(ContextInput):
     settings_module: str
 
     def build_context(self, context_inputs, **kwargs) -> DjangoContext:
-        apps_ctx = context_inputs.resolve("apps")
-        return DjangoContext.from_apps_ctx(
-            apps_ctx, settings_module=self.settings_module, project_path=self.project_path
+        project = DjangoProject()
+        django_apps = None
+        if apps_ctx := context_inputs.resolve("apps"):
+            django_apps = DjangoApps(
+                store=apps_ctx.store,
+                state_store=apps_ctx.state_store,
+                project=project,
+            )
+
+        return DjangoContext(
+            project=project, apps=django_apps, settings_module=self.settings_module, project_path=self.project_path
         )
 
 
@@ -83,12 +83,18 @@ class DjangoEnable(Operation):
     )
 
     def _apply(self, state, *_, apps, django_ctx, **__):
-        django_ctx.project.enable(apps.apps)
-        django_ctx.project.sync_installed_apps()
+        self._assert_has_apps(django_ctx)
+        django_ctx.apps.enable(apps.apps)
+        django_ctx.apps.sync_installed_apps()
 
     def _rollback(self, state, *_, apps, django_ctx, **__):
-        django_ctx.project.disable(apps.apps)
-        django_ctx.project.sync_installed_apps()
+        self._assert_has_apps(django_ctx)
+        django_ctx.apps.disable(apps.apps)
+        django_ctx.apps.sync_installed_apps()
+
+    def _assert_has_apps(self, django_ctx):
+        if django_ctx.apps is None:
+            raise ValueError("The provided Django context misses apps input.")
 
     # Rollback is handled by upstream state restoration.
 

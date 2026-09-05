@@ -30,18 +30,28 @@ def d_app_plan():
 
 class TestDjango:
     def test_apply_base_plan(
-        self, executor, d_app_plan, django_project, django_ctx, setup_project, make_spec, apps_ctx, app_store, db_path
+        self,
+        executor,
+        d_app_plan,
+        django_apps,
+        django_project,
+        django_ctx,
+        setup_project,
+        make_spec,
+        apps_ctx,
+        app_store,
+        db_path,
     ):
         db_path.unlink(missing_ok=True)
 
         context = {"apps": apps_ctx, "django_ctx": django_ctx}
-        django_project.disable(apps_ctx.apps)
+        django_apps.disable(apps_ctx.apps)
 
         spec = make_spec(d_app_plan)
         state = executor.apply_sync(spec, **context)
 
-        django_project.state_store.load()
-        enabled = django_project.get_installed_apps()
+        django_apps.state_store.load()
+        enabled = django_apps.get_installed_apps()
         assert "django_app_1" in enabled
         assert "django_app_2" in enabled
 
@@ -53,6 +63,6 @@ class TestDjango:
 
         executor.rollback_sync(spec, state, **context)
 
-        django_project.state_store.load()
-        assert not django_project.get_installed_apps()
+        django_apps.state_store.load()
+        assert not django_apps.get_installed_apps()
         assert not django_project.get_applied_migrations()

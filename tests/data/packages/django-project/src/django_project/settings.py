@@ -9,13 +9,13 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 
-from ox_orch.django import DjangoProject
+from ox_orch.django import DjangoApps
 from ox_orch.apps import AppStateFileStore
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-django_project = DjangoProject(state_store=AppStateFileStore(Path(__file__).parent.parent.parent / "app_states.json"))
-django_project.state_store.load()
+django_apps = DjangoApps(state_store=AppStateFileStore(BASE_DIR / "app_states.json"))
+django_apps.state_store.load()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 STATIC_ROOT = BASE_DIR / "static"
@@ -30,7 +30,7 @@ ALLOWED_HOSTS = ["127.0.0.1"]
 SECRET_KEY = "django-insecure-bg*enkwcea%4xjcvkpbb_h@6#ue78#t1q(z^w@faagal7**^9i"
 
 # Application definition
-INSTALLED_APPS = django_project.get_installed_apps() + [
+INSTALLED_APPS = django_apps.get_installed_apps() + [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
