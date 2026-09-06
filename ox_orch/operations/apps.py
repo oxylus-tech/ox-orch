@@ -12,7 +12,17 @@ from .install import InstallOperation, InstallContext
 from .plan import Plan, PlanState
 
 
-__all__ = ("AppsContext", "AppPlanState", "AppPlan", "ReconciliationPlan", "AppsPlan")
+__all__ = (
+    "AppContext",
+    "AppsContext",
+    "AppsContextInput",
+    "AppPlanState",
+    "AppPlan",
+    "ReconciliationState",
+    "ReconciliationPlan",
+    "AppsState",
+    "AppsPlan",
+)
 
 
 logger = logging.getLogger()
@@ -45,7 +55,7 @@ class AppsContext:
         return cls(apps=apps, store=store, **kwargs)
 
 
-@register("app")
+@register("apps:app")
 class AppContextInput(ContextInput):
     app: str = Field(description="Application id retrieved from app store")
 
@@ -56,8 +66,12 @@ class AppContextInput(ContextInput):
         return AppContext(app=app, app_state=state)
 
 
-@register("apps")
+@register("apps:apps")
 class AppsContextInput(ContextInput):
+    """
+    User input provided as contexts to run with the :py:class:`AppsPlan`.
+    """
+
     store_backend: str = Field(default="memory", description="Application store backend, as memory, or file.")
     store_args: dict[str, Any] = Field(default_factory=dict, description="Application store initial arguments.")
     state_store_backend: str = Field(
@@ -81,7 +95,7 @@ class AppsContextInput(ContextInput):
         )
 
 
-@register("app")
+@register("apps:app")
 class AppPlanState(PlanState):
     """State for the AppPlan operation."""
 
@@ -109,10 +123,10 @@ class AppPlanState(PlanState):
         self.facts.update((k, v) for k, v in facts.items() if k != "features")
 
 
-@register("app")
+@register("apps:app")
 class AppPlan(Plan):
     """
-    Reconcile a Django application after package installation.
+    Reconcile an application after package installation.
 
     Nested operations will be run with ``app`` context (instance of :py:class:`AppContext`).
     """
@@ -144,7 +158,7 @@ class AppPlan(Plan):
         )
 
 
-@register("reconciliation")
+@register("apps:reconciliation")
 class ReconciliationState(ChangeSet, PlanState):
     """State for the reconciliation of applications."""
 
@@ -152,7 +166,7 @@ class ReconciliationState(ChangeSet, PlanState):
     pass
 
 
-@register("reconciliation")
+@register("apps:reconciliation")
 class ReconciliationPlan(Plan):
     """
     This operation is used to apply a nested operation on updated packages.
@@ -177,7 +191,7 @@ class ReconciliationPlan(Plan):
 
     app_plan: AppPlan = Field(description="The application plan to apply.")
 
-    def _apply(self, state, execution, apps: AppsContext, **context):
+    def _apply(self, state, execution, apps: AppsContext, only_dirty=False, **context):
         ctx, apps = apps, apps.apps
         if not apps:
             return
@@ -185,18 +199,18 @@ class ReconciliationPlan(Plan):
         # Keep track of ids required by user
         ids = {app.id for app in apps}
 
-        # Resolve dependencies
-        if store := ctx.store:
-            apps = store.resolve([a.ref for a in apps])
+        if context.get("install"):
+            # Resolve dependencies
+            if store := ctx.store:
+                apps = store.resolve([a.ref for a in apps])
 
-        # 1. Detect package version drift in environment.
-        dirty = self.get_dirty_apps(apps, ctx.state_store)
-
-        if not apps:
-            return
+            # 1. Detect package version drift in environment.
+            apps = self.get_dirty_apps(apps, ctx.state_store)
+            if not apps:
+                return
 
         # 2. Reconcile
-        for app in dirty:
+        for app in apps:
             op = self.app_plan.model_copy(update={"app": app.model_copy(deep=True)})
             op_state = op.create_state()
             state.children.append(op_state)
@@ -338,17 +352,18 @@ class AppsPlan(Plan):
                 return value
 
     def get_operations(self, state):
-        items = [
-            *self.before_install,
-            self.install,
-            *self.after_install,
-        ]
+        if self.install:
+            items = [*self.before_install, self.install, *self.after_install]
+        else:
+            items = []
+
         if self.reconciliation is not None:
             items.append(self.reconciliation)
         return items + self.operations
 
     def _apply(self, state, execution, apps: AppsContext, **context):
-        context["install"] = InstallContext(packages=apps.apps)
+        if self.install:
+            context["install"] = InstallContext(packages=apps.apps)
 
         yield from super()._apply(state, execution, apps=apps, **context)
 

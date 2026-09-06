@@ -165,8 +165,8 @@ class PipInstall(InstallOperation):
 class UvInstall(InstallOperation):
     """Install python packages using UV."""
 
-    _label = "UV Install"
-    _description = "Install packages using UV."
+    _label = "Install in UV"
+    _description = "Install packages in UV environment (running pip)."
 
     def get_forward(self, state, shell, requirements, options=None, **_):
         return ["uv", "pip", "install", *(options or []), *requirements]
@@ -179,8 +179,8 @@ class UvInstall(InstallOperation):
 class PoetryInstall(InstallOperation):
     """Install python packages using Poetry."""
 
-    _label = "Poetry Install"
-    _description = "Install packages using Poetry."
+    _label = "Install in Poetry"
+    _description = "Install packages in Poetry environment (running pip)."
 
     def get_forward(self, state, shell, requirements, options=None, **_):
         return ["poetry", "run", "pip", "install", *(options or []), *requirements]

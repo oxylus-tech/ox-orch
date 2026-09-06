@@ -1,7 +1,7 @@
 .. _guide-applications:
 
-Applications
-============
+Application
+===========
 
 One of the primary goals of the ox-orch's creation is to be able to install, upgrade, downgrade, uninstall python project, with clean reconciliation and pre-/post-operations workflow.
 
@@ -12,7 +12,7 @@ Here are the main objects you encounter in :py:mod:`ox_orch.apps`:
 - :py:class:`~ox_orch.apps.app.Application`: provide information about a package to install (id, package, version, etc.). It declare dependencies to other Application instances.
 - :py:class:`~ox_orch.apps.state.AppPlanState`: state of an application, as installed version, package, etc.
 - :py:class:`~ox_orch.apps.store.AppStore`: store of Application;
-- :py:class:`~ox_orch.apps.state_store.AppPlanStateStore`: store of application states;
+- :py:class:`~ox_orch.apps.state_store.AppStateStore`: store of application states;
 
 And operations:
 

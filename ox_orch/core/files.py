@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from .pydantic import hydrate as hydrate_
 
 
-__all__ = ("FileBackend", "YAMLBackend", "JSONBackend", "JSONLBackend", "backends")
+__all__ = ("FileBackend", "YAMLBackend", "JSONBackend", "JSONLBackend", "GenericFileBackend", "backends")
 
 
 class FileBackend(ABC):
@@ -181,6 +181,49 @@ class JSONLBackend(FileBackend):
                     f.write(o.model_dump_json() + "\n")
             else:
                 f.write(obj.model_dump_json() + "\n")
+
+
+class GenericFileBackend(FileBackend):
+    """
+    Automatically use a backend based on the path suffix.
+
+    Constraints:
+
+    - The backend shall be registered to :py:data:`backends`.
+    - Only works for using the :py:meth:`load` and :py:meth:`save` methods.
+    - You can use the same instance of this class for multiple loads and saves.
+
+    """
+
+    def load(self, path, *args, **kwargs):
+        """
+        Load a file using the backend matching path suffix.
+
+        :raises ValueError: when no registered backend was found for it.
+        """
+        fmt = path.suffix[1:]
+        if cls := backends.get(fmt):
+            return cls(model_class=self.model_class).load(path, *args, **kwargs)
+        raise ValueError(f"No backend is implemented for {fmt} format.")
+
+    def save(self, path, *args, **kwargs):
+        """
+        Save a file using the backend matching path suffix.
+
+        :raises ValueError: when no registered backend was found for it.
+        """
+        fmt = path.suffix[1:]
+        if cls := backends.get(fmt):
+            return cls(model_class=self.model_class).save(path, *args, **kwargs)
+        raise ValueError(f"No backend is implemented for {fmt} format.")
+
+    def parse(self, *args, **kwargs):
+        """Raises NotImplementedError."""
+        raise NotImplementedError("Calling `parse` is not allowed on generic backend.")
+
+    def write(self, *args, **kwargs):
+        """Raises NotImplementedError."""
+        raise NotImplementedError("Calling `write` is not allowed on generic backend.")
 
 
 backends = {

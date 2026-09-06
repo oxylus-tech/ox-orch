@@ -1,6 +1,6 @@
 from typing import Any, get_origin, get_args
 
-from pydantic import BaseModel, model_serializer, model_validator
+from pydantic import BaseModel, model_serializer
 
 from .registry import RegisteredClass
 
@@ -88,21 +88,14 @@ class PolymorphicModel(RegisteredClass, BaseModel):
             return {"__type_id__": key, "config": recurse(vars(self))}
         return data
 
-    @model_validator(mode="before")
-    def _dispatch_polymorphic(cls, data: Any):
-        """Intercept raw input and dispatch to the correct subclass."""
-        if not isinstance(data, dict):
-            return data
-
-        type_id = data.get("__type_id__")
-        if not type_id:
-            return data
-
     @classmethod
     def model_validate(cls, obj, **kwargs):
+        if isinstance(obj, str):
+            return super().model_validate()
+
         if isinstance(obj, dict):
             if type_id := obj.get("__type_id__"):
-                raw = obj.get("config")
+                raw = obj.get("config", obj)
                 real_cls = cls.get_subclass(type_id)
                 if isinstance(raw, BaseModel):
                     raw = raw.model_dump()

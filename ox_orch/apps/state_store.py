@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import Field
 
 
-from ox_orch.core import stores, JSONBackend, register, Registry, PolymorphicModel, FileBackend, RegisteredClass
+from ox_orch.core import stores, GenericFileBackend, register, Registry, PolymorphicModel, FileBackend, RegisteredClass
 from .app import Application
 from .state import AppState, AppStateFeature, InstallOrigin
 
@@ -105,7 +105,7 @@ class AppStateMemoryStore(AppStateStore, stores.MemoryStore):
 
 @register("file")
 class AppStateFileStore(AppStateStore, stores.FileStore):
-    backend: FileBackend = JSONBackend(AppStateStoreModel)
+    backend: FileBackend = GenericFileBackend(AppStateStoreModel)
 
     def load(self):
         model = super().load()

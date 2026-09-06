@@ -8,7 +8,7 @@ from typing import Any, Generic, TypeVar, Iterable, Iterator, Type
 from pydantic import BaseModel, Field, TypeAdapter
 
 
-from .files import FileBackend, JSONBackend
+from .files import FileBackend, GenericFileBackend
 from .pydantic import PolymorphicModel
 
 
@@ -279,7 +279,7 @@ class FileStore(MemoryStore[K, V]):
 
     path: Path
     """ Path to file. """
-    backend: FileBackend = JSONBackend(FileStoreModel)
+    backend: FileBackend = GenericFileBackend(FileStoreModel)
     """ File de-serialization backend (json, yaml, ...). """
     hydrate: bool = True
     """

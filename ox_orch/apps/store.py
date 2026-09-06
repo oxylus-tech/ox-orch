@@ -4,7 +4,7 @@ from typing import Iterable
 
 from pydantic import Field
 
-from ox_orch.core import stores, register, FileBackend, JSONBackend, Registry, RegisteredClass
+from ox_orch.core import stores, register, FileBackend, GenericFileBackend, Registry, RegisteredClass
 from .app import Application, AppRef, AppId, AppRelease, as_app_ref
 
 
@@ -114,7 +114,7 @@ class AppFileStore(AppMemoryStore, stores.FileStore):
     You should call :py:meth:`from_yaml` or :py:meth:`from_json`.
     """
 
-    backend: FileBackend = JSONBackend(AppStoreModel)
+    backend: FileBackend = GenericFileBackend(AppStoreModel)
 
 
 def resolve_install_order(releases: list[AppRelease]) -> list[AppRelease]:

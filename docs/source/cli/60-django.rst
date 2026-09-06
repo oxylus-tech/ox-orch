@@ -26,10 +26,10 @@ A simple setup to deploy application update is the following:
     operation:
       __type_id__: plan
       operations:
-      - __type_id__: django:setup            # ensure django is setup
-      - __type_id__: django:migrate          # run migrations
-      - __type_id__: django:collectstatic    # collect statics
-      - __type_id__: django:compilemessages  # compile i18n messages
+      - "django:setup"            # ensure django is setup
+      - "django:migrate"          # run migrations
+      - "django:collectstatic"    # collect statics
+      - "django:compilemessages"  # compile i18n messages
       # - other operations can go here...
       # Or here, after the fork run
 
@@ -37,8 +37,7 @@ If you're lazy (and you should be on a good manner), you can use the ``django:re
 
 .. code-block:: yaml
 
-    operation:
-      __type_id__: django:reconciliation
+    operation: "django:reconciliation"
 
 You can add other operations at different places using the following fields on the reconciliation:
 
@@ -49,17 +48,29 @@ You can add other operations at different places using the following fields on t
 .. code-block:: yaml
 
     operation:
-      __type_id__: django:reconciliation
+      __type_id__: "django:reconciliation"
       after_migrate:
        - __type_id__: shell
          forward: ["echo", "migrations done!"]
          backward: ["echo", "migrations reverted!"]
 
 
-Dynamic application enabling
-----------------------------
+Context
+.......
 
-The main constraint of Django is that once the project is setup and runs, it is actually not possible to cleanly reload the configuration. New or updated application won't be taken in account, and this is by design.
+This is the context used over Django related operations (:py:class:`~ox_orch.django.operations.DjangoContextInput`):
+
+.. code-block:: yaml
+
+    django:
+        project_path: "/path/to/the/project"
+        settings_module: "my_project.settings"
+
+
+Managed applications mode
+-------------------------
+
+The main constraint of Django is that once the project is setup and runs, it is actually not possible to cleanly reload the configuration. New or updated applications won't be taken in account, and this is by design.
 
 This problem shall be break down in two parts:
 
@@ -89,15 +100,14 @@ This is where the ``fork`` operation goes in, which results in:
 
     operation:
       __type_id__: apps
-      # Use UV to install packages
-      install: install:uv
+      # Use Pip to install packages
+      install: "install:pip"
       operations:
       # Ensure installed packages are enabled
-      - __type_id__: django:enable
+      - "django:enable"
       # Fork into a new subprocess ensuring django reinitialization
       - __type_id__: fork
-        operation:
-          __type_id__: django:reconciliation
+        operation: "django:reconciliation"
 
 Requirements
 ............
@@ -106,12 +116,44 @@ The ``django:enable`` operation works using the application framework of ox-orch
 
 You'll need to setup:
 
-- An application store and state store that provides django-related information (as feature);
+- An application store and state store that provides django-related information (as feature)..
 - The Django project to get the list of enabled application;
 - The ox-orch workflow;
 
 
-Setup django:
+Setup Application and stores
+............................
+
+To provide django-capabilities and information, we add the django feature on applications and states.:
+
+.. code-block:: yaml
+
+    id: ox-fin
+    name: Oxylus Finances
+    package: ox-fin
+    version: 0.14.1
+    features:
+        # Add the feature on the application
+        django:
+            # The list of Django application paths used for INSTALLED_APPS settings.
+            apps:
+            - ox_erp.contacts
+            - ox_erp.locations
+
+Please refer to :ref:`this documentation <cli-applications>` for detailed information about applications.
+
+The generated application state will have an assigned feature too:
+
+.. code-block:: yaml
+
+    id: ox-fin
+    features:
+        django:
+            enabled: true
+
+
+Setup django
+............
 
 .. code-block:: python
 
@@ -143,3 +185,74 @@ Setup django:
     ]
 
     # ...
+
+
+Workflow
+........
+
+Example setup:
+
+.. code-block:: yaml
+
+    # Reuse the previous example
+    operation:
+      __type_id__: apps
+      # Use Pip to install packages
+      install: "install:pip"
+      operations:
+      # Ensure installed packages are enabled
+      - "django:enable"
+      # Fork into a new subprocess ensuring django reinitialization
+      - __type_id__: fork
+        operation: "django:reconciliation"
+
+Note that we don't use the reconciliation mechanisms of the ``apps`` operation, since ``django:reconciliation`` works independently of apps update.
+
+What you set as reconciliation operations will run for any installed/updated application and their dependencies:
+
+.. code-block:: yaml
+
+    # Reuse the previous example
+    operation:
+      __type_id__: apps
+      # ...
+      reconciliation:
+      - "django:enable"
+      operations:
+      - __type_id__: fork
+        operation: "django:reconciliation"
+
+Only updated and installed applications or dependencies will be enabled.
+
+
+Context
+.......
+
+You need to provide information for the ``apps`` operations and ``django:enable``:
+
+.. code-block:: yaml
+
+    # Used by ``apps`` and ``django:enable``
+    apps:
+      apps: ["ox-fin"]
+      store_backend: file
+      store_args:
+          path: ./path/to/app_store.yaml
+      state_store_backend: file
+      state_store_args:
+          path: ./path/to/app_state_store.yaml
+
+    # Django context
+    django:
+        project_path: "/path/to/the/project"
+        settings_module: "my_project.settings"
+
+
+Run it
+......
+
+Once you got all those pieces, you can just run it:
+
+.. code-block:: bash
+
+    ox-orch run -c context.yaml apply django.yaml -s trace.yaml

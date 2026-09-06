@@ -52,7 +52,6 @@ multiple nested operations.
 The command line utility executes a root operation, which may itself contain
 an arbitrarily complex hierarchy of nested operations.
 
-
 State
 .....
 

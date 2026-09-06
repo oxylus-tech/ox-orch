@@ -32,8 +32,6 @@ Lets run it:
 
     ox-orch run apply hello.yaml
 
-Application installation
-
 
 Lets go one step further, by adding a package installation step:
 
@@ -49,8 +47,19 @@ Lets go one step further, by adding a package installation step:
       - __type_id__: shell
         forward: ["echo", "Hello world!"]
         backward: ["echo" "Goodbye world!"]
-      # Add an installation step
-      - __type_id__: install:uv
+      # Package install: syntax sugar
+      - "install:pip"
+
+.. tip::
+
+    Ox-Orch provides syntax sugar when a field requires an operation as input. When you dont need to provide argument you can use its identifier as a string:
+
+    .. code-block:: yaml
+
+        operations:
+        - __type_id__: "install:pip"
+        # ... is the same as...
+        - "install:pip"
 
 As you might see, there is no package list here. That's because packages is an input argument, not a pipeline specification. Those are provided as input value to the command line tool either as a config file or argument.
 
@@ -74,7 +83,7 @@ You can also provide extra input arguments using the ``--input/-i`` argument:
 
 .. code-block:: bash
 
-    ox-orch run -i "{\"install\":{\"packages\":{\"httpx\":\"0.28.1\"}}}" apply hello.yaml
+    ox-orch run -i "install={\"packages\":{\"httpx\":\"0.28.1\"}}" apply hello.yaml
 
 
 States
@@ -120,10 +129,10 @@ The second option is to set the execution spec attribute :py:attr:`~ox_orch.oper
     name: Django Install
     operation:
       __type_id__: apps
-      install: install:uv
+      install: "install:uv"
       operations:
-      - __type_id__: django:enable
-      - __type_id__: django:reconciliation
+      - __type_id__: "django:enable"
+      - __type_id__: "django:reconciliation"
     modules:
     - ox_orch.django
 

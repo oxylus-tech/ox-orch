@@ -44,9 +44,11 @@ class DjangoContext:
 class DjangoContextInput(ContextInput):
     __context_key__ = "django_ctx"
     """ Avoid clash name with the django library. """
+    _label = "Django"
+    _description = "This is configuration used for `django` operations."
 
-    project_path: Path
-    settings_module: str
+    project_path: Path = Field(default=Path("."), description="Path to the Django project.")
+    settings_module: str = Field(description="Project settings module.")
 
     def build_context(self, context_inputs, **kwargs) -> DjangoContext:
         project = DjangoProject()

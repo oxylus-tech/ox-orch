@@ -135,7 +135,7 @@ class TestAppPlan:
 class TestReconciliationPlan:
     def test__apply(self, reconciliation, execution, apps_ctx, app_dep, app_dep_1, app_meta, app_meta_1):
         state = reconciliation.create_state()
-        consume_iter(reconciliation._apply(state, execution, apps_ctx, shell=EchoShell(), enable=True))
+        consume_iter(reconciliation._apply(state, execution, apps_ctx, shell=EchoShell(), enable=True, install=True))
 
         expected_changes = [app_meta, app_meta_1, app_dep]
         resolved_changes = [st.app for st in state.children]
