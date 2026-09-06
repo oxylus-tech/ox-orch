@@ -67,6 +67,16 @@ This is the context used over Django related operations (:py:class:`~ox_orch.dja
         settings_module: "my_project.settings"
 
 
+Running
+.......
+
+You need to load the :py:mod:`ox_orch.django` module as the following:
+
+.. code-block:: bash
+
+    ox-orch -m "ox_orch.django" run -c context.yaml apply django.yaml
+
+
 Managed applications mode
 -------------------------
 
@@ -248,11 +258,11 @@ You need to provide information for the ``apps`` operations and ``django:enable`
         settings_module: "my_project.settings"
 
 
-Run it
-......
+Running
+.......
 
 Once you got all those pieces, you can just run it:
 
 .. code-block:: bash
 
-    ox-orch run -c context.yaml apply django.yaml -s trace.yaml
+    ox-orch -m "ox_orch.django" run -c context.yaml apply django.yaml -s trace.yaml
