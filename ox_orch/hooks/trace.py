@@ -18,6 +18,9 @@ class TraceHook(ExecutorHook):
     This replaces a dedicated trace subsystem.
     """
 
+    _label = "trace"
+    _description = "Record execution traces and optionally persist them."
+
     def __init__(self, backend: FileBackend | None = None):
         self.backend = backend
         self.buffer: list[TraceEvent] = []

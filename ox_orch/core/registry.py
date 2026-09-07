@@ -173,7 +173,15 @@ class DocumentedRegistry(Registry):
     Only :py:class:`DocumentedClass` subclasses can be registered here.
     """
 
+    label: str | None = None
+    description: str = ""
+
     _enforce_subclass = DocumentedClass
+
+    def __init__(self, label=None, description=""):
+        self.label = label
+        self.description = description
+        super().__init__()
 
     def get_infos(self, skip_no_doc: bool = False) -> list[ModelInfo]:
         """Return information about the registered elements."""

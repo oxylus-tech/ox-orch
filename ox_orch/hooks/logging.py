@@ -17,6 +17,9 @@ class LoggingHook(ExecutorHook):
     operations without modifying business logic.
     """
 
+    _label = "logging"
+    _description = "Print current operation status in logs."
+
     def __init__(self, logger: logging.Logger | None = None):
         """
         :param logger: Logger instance to use.

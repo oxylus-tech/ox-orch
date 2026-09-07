@@ -22,7 +22,7 @@ __all__ = (
 )
 
 
-CONTEXT_INPUT_REGISTRY = DocumentedRegistry()
+CONTEXT_INPUT_REGISTRY = DocumentedRegistry("Contexts")
 
 
 class ContextInput(PolymorphicModel, DocumentedClass, ABC):

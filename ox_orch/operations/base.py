@@ -29,8 +29,8 @@ __all__ = (
 logger = logging.getLogger("ox-orch")
 
 
-STATE_REGISTRY = DocumentedRegistry()
-OPERATION_REGISTRY = DocumentedRegistry()
+STATE_REGISTRY = DocumentedRegistry("Operation States")
+OPERATION_REGISTRY = DocumentedRegistry("States")
 
 
 @register("operation")

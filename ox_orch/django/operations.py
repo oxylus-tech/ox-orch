@@ -166,6 +166,8 @@ class Migrate(Operation):
 
     __state_class__ = MigrationState
     __apply_spec__ = ("django_ctx",)
+    _label = "Django: migrate"
+    _description = "Run and keep track of django migrations."
 
     def _apply(self, state, *args, django_ctx, **inputs):
         project = django_ctx.project

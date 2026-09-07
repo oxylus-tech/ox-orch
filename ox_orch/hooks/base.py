@@ -6,16 +6,16 @@ from typing import Any
 
 from ox_orch.core.events import Hook
 from ox_orch.core.stores import Store
-from ox_orch.core.registry import Registry, RegisteredClass, register
+from ox_orch.core.registry import DocumentedRegistry, DocumentedClass, register
 
 
 __all__ = ("EXECUTOR_HOOK_REGISTRY", "ExecutorHook", "RecordingHook", "PersistStateHook")
 
 
-EXECUTOR_HOOK_REGISTRY = Registry()
+EXECUTOR_HOOK_REGISTRY = DocumentedRegistry("Hooks", description="Hooks called on workflow execution.")
 
 
-class ExecutorHook(Hook, RegisteredClass):
+class ExecutorHook(Hook, DocumentedClass):
     """
     Base hook class used by the runtime executor.
 

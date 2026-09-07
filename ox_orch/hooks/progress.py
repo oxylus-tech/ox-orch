@@ -19,6 +19,9 @@ class ProgressHook(ExecutorHook):
     CLI progress bars, APIs, SSE streams, WebSockets, dashboards, etc.
     """
 
+    _label = "progress"
+    _description = "Collect execution progress information."
+
     def __init__(self):
         self.reset()
 
