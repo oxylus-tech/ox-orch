@@ -38,7 +38,7 @@ Lets go one step further, by adding a package installation step:
 .. code-block:: yaml
 
     # install.yaml
-    name: UV Install
+    name: Pip Install
     operation:
       # A Plan allows to run multiple operations sequentially
       __type_id__: plan
@@ -49,6 +49,8 @@ Lets go one step further, by adding a package installation step:
         backward: ["echo" "Goodbye world!"]
       # Package install: syntax sugar
       - "install:pip"
+
+A ``plan`` is an operation that runs multiple nested ones sequentially (:py:class:`~ox_orch.operations.plan.Plan`).
 
 .. tip::
 
@@ -131,8 +133,8 @@ The second option is to set the execution spec attribute :py:attr:`~ox_orch.oper
       __type_id__: apps
       install: "install:uv"
       operations:
-      - __type_id__: "django:enable"
-      - __type_id__: "django:reconciliation"
+      - "django:enable"
+      - "django:reconciliation"
     modules:
     - ox_orch.django
 

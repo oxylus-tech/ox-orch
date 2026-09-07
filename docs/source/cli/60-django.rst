@@ -5,6 +5,7 @@ Django Integration
 
 One of the primarily goal of ox-orch was to be deploy applications and hot-reload a running Django server. Lets just focus for the deployment part now, later we'll see how to dynamically install and add applications.
 
+The code lies in the :py:mod:`ox_orch.django` module.
 
 Quickstart
 ----------
@@ -134,7 +135,7 @@ You'll need to setup:
 Setup Application and stores
 ............................
 
-To provide django-capabilities and information, we add the django feature on applications and states.:
+To provide django capabilities and information, we add the ``django`` feature on applications and states (:py:class:`~ox_orch.django.project.DjangoAppFeature`)`:
 
 .. code-block:: yaml
 
@@ -152,7 +153,7 @@ To provide django-capabilities and information, we add the django feature on app
 
 Please refer to :ref:`this documentation <cli-applications>` for detailed information about applications.
 
-The generated application state will have an assigned feature too:
+The generated application state will have an assigned feature too (:py:class:`~ox_orch.django.project.DjangoStateFeature`):
 
 .. code-block:: yaml
 
@@ -238,7 +239,7 @@ Only updated and installed applications or dependencies will be enabled.
 Context
 .......
 
-You need to provide information for the ``apps`` operations and ``django:enable``:
+You need to provide information to the ``apps`` and ``django:enable`` operations:
 
 .. code-block:: yaml
 

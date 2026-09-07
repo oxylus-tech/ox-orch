@@ -106,6 +106,7 @@ class ModelInfo(BaseModel):
     label: str
     description: str
     fields: list[ModelFieldInfo]
+    _model: Type[DocumentedClass] | None = None
 
     @classmethod
     def from_model_class(cls, model: Type[DocumentedClass], skip_no_doc: bool = False) -> ModelInfo | None:
@@ -142,12 +143,14 @@ class ModelInfo(BaseModel):
                 )
             )
 
-        return cls(
+        info = cls(
             type_id=model.__type_id__,
             label=getattr(model, "_label", None) or model.__type_id__,
             description=model._description,
             fields=fields,
         )
+        info._model = model
+        return info
 
 
 class DocumentedClass(RegisteredClass):

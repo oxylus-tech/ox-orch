@@ -1,4 +1,7 @@
-from typing import Any, get_origin, get_args
+from __future__ import annotations
+
+import types
+from typing import Any, Annotated, get_origin, get_args
 
 from pydantic import BaseModel, model_serializer
 
@@ -8,6 +11,7 @@ from .registry import RegisteredClass
 __all__ = (
     "PolymorphicModel",
     "LazyTranslation",
+    "render_type",
 )
 
 
@@ -217,3 +221,60 @@ class LazyTranslation:
         return core_schema.no_info_plain_validator_function(
             validate, serialization=core_schema.plain_serializer_function_ser_schema(serialize, when_used="json")
         )
+
+
+def render_type(annotation: Any) -> str:
+    """
+    Render a Python type annotation as a human-readable string.
+
+    Examples:
+
+    .. code-block:: python
+
+        assert render_type(str) == 'str'
+        assert render_type(list[str]) == 'list[str]'
+        assert render_type(str | None) == 'str | None'
+        assert render_type(dict[str, list[int]]) == 'dict[str, list[int]]'
+
+    :param annotation: the Python type annotation to render
+    :returns: a representation string.
+    """
+
+    if annotation is Any:
+        return "Any"
+
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    # Annotated[T, ...] -> T
+    if origin is Annotated:
+        return render_type(args[0])
+
+    # Union / PEP 604 unions.
+    if origin is types.UnionType:
+        return " | ".join(render_type(arg) for arg in args)
+
+    # typing.Union on older-style annotations.
+    if str(origin) == "typing.Union":
+        return " | ".join(render_type(arg) for arg in args)
+
+    # Generic types.
+    if origin is not None:
+        origin_name = getattr(origin, "__name__", str(origin))
+
+        if args:
+            arguments = ", ".join(render_type(arg) for arg in args)
+            return f"{origin_name}[{arguments}]"
+
+        return origin_name
+
+    # Normal classes and types.
+    if isinstance(annotation, type):
+        return annotation.__name__
+
+    # Forward references, TypeVars, etc.
+    name = getattr(annotation, "__name__", None)
+    if name:
+        return name
+
+    return str(annotation)
