@@ -10,10 +10,11 @@ from ox_orch.hooks.base import EXECUTOR_HOOK_REGISTRY
 from ox_orch.operations import OPERATION_REGISTRY, STATE_REGISTRY
 
 from .base import cli
+from .click import DynamicChoice
 from .utils import print_registry_info
 
 __all__ = (
-    "info",
+    "schemas",
     "registries",
 )
 
@@ -26,12 +27,12 @@ registries: dict[str, Type[Registry]] = {
 }
 
 
-@cli.command("info")
-@click.argument("what", type=click.Choice(list(registries.keys())))
+@cli.command("schemas")
+@click.argument("model", type=DynamicChoice(registries.keys))
 @click.option("--details", "-d", is_flag=True, help="Show detailed informations.")
-def info(what=None, details=False):
+def schemas(model=None, details=False):
     """Fetch an display various information."""
-    if registry := registries.get(what):
+    if registry := registries.get(model):
         print_registry_info(f"{registry.label}", registry)  # , details=details)
 
 

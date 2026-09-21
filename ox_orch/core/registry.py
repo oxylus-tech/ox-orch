@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import ClassVar, Type, Iterable
+from typing import ClassVar, Callable, Type, Iterable, get_type_hints
 
 from pydantic import BaseModel
 from pydantic.fields import PydanticUndefined
@@ -84,6 +84,9 @@ class ModelFieldInfo(BaseModel):
     """Information of a field."""
 
     name: str
+    """ Field name. """
+    type: str = ""
+    """ Field type. """
     description: str = ""
     """ Human description of the field. """
     default: str | None = None
@@ -121,9 +124,12 @@ class ModelInfo(BaseModel):
         :param model: the pydantic model class;
         :param skip_no_doc: if true, skip fields not providing description;
         """
+        from .pydantic import render_type
+
         if not model.__dict__.get("__type_id__"):
             return None
 
+        type_hints = get_type_hints(model)
         fields = []
         for name, field in model.__pydantic_fields__.items():
             if skip_no_doc and not field.description:
@@ -135,9 +141,13 @@ class ModelInfo(BaseModel):
             elif field.default_factory:
                 default = field.default_factory.__name__
 
+            field_type = type_hints.get(name)
+            field_type = field_type and render_type(field_type)
+
             fields.append(
                 ModelFieldInfo(
                     name=name,
+                    type=field_type,
                     description=field.description or "",
                     default=default,
                 )
@@ -183,13 +193,27 @@ class DocumentedRegistry(Registry):
         self.description = description
         super().__init__()
 
-    def get_infos(self, skip_no_doc: bool = False) -> list[ModelInfo]:
-        """Return information about the registered elements."""
-        return [
-            ModelInfo.from_model_class(op_cls, skip_no_doc=skip_no_doc)
-            for op_cls in self.values()
-            if op_cls.__dict__.get("__type_id__")
-        ]
+    def get_infos(
+        self, skip_no_doc: bool = False, filter: Callable[[Type[DocumentedRegistry]], bool] | None = None
+    ) -> list[ModelInfo]:
+        """
+        Return information about the registered elements.
+
+        :param skip_no_doc: skip fields missing documentation (see :py:meth:`ModelInfo.from_model_class`).
+        :param filter: callable returning whether a model should be included or not.
+        :returns: a list of :py:class:`ModelInfo`.
+        """
+        results = []
+
+        for op_cls in self.values():
+            if filter and not filter(op_cls):
+                continue
+
+            if op_cls.__dict__.get("__type_id__"):
+                info = ModelInfo.from_model_class(op_cls, skip_no_doc=skip_no_doc)
+                results.append(info)
+
+        return results
 
 
 def register(type_id: str | None = None, registry: Registry | None = None):

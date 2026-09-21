@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Type, Sequence, get_type_hints
+from typing import Callable, Type, Sequence
 
 from pydantic import BaseModel
 from rich import print
@@ -7,7 +7,7 @@ from rich.align import Align
 from rich.table import Table
 
 from ox_orch.core import files
-from ox_orch.core.pydantic import render_type
+from ox_orch.core.registry import DocumentedRegistry
 
 
 __all__ = ("get_file_backend", "load_file", "save_file", "create_table", "print_registry_info")
@@ -73,27 +73,26 @@ def create_table(title, columns: Sequence[str | tuple[str, str]], title_style="b
     return t
 
 
-def print_registry_info(title, registry):
+def print_registry_info(title, registry, filter: Callable[[Type[DocumentedRegistry]], bool] | None = None):
+    """
+    Display informations about a DocumentedRegistry in a table.
+
+    :param title: title of the registry
+    :param registry: the registry to display
+    :param filter: filtering predicate
+    """
     table = create_table(title, columns=["Name", "Label / Default", "Description"])
-    infos = registry.get_infos(skip_no_doc=True)
+    infos = registry.get_infos(skip_no_doc=True, filter=filter)
     infos.sort(key=lambda o: o.type_id)
 
     for info in infos:
         table.add_row(f"[b]{info.type_id}[/b]", f"[b]{info.label}[/b]", f"[b]{info.description}[/b]")
-
-        if info._model:
-            type_hints = get_type_hints(info._model)
-        else:
-            type_hints = {}
-
         if info.fields:
             table.add_section()
             for field in info.fields:
-                field_type = type_hints.get(field.name, "")
-                field_type = field_type and render_type(field_type)
                 table.add_row(
                     Align(f"[i]{field.name}[/i]", "right"),
-                    Align(f"[cyan]{field_type}[/cyan]=[i yellow]{field.default}[/i yellow]", "right"),
+                    Align(f"[cyan]{field.type}[/cyan]=[i yellow]{field.default}[/i yellow]", "right"),
                     f"[i]{field.description}[/i]",
                 )
         table.add_section()

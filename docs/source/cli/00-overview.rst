@@ -76,10 +76,7 @@ You can list operations using:
 
 .. code-block:: bash
 
-    ox-orch info operations
-
-    # With informations and fields
-    ox-orch info operations --details # or -d
+    ox-orch schemas operations
 
 Operations provide the actual behavior executed by a workflow. They may be
 generic Ox-Orch operations or operations provided by an integration.
@@ -126,7 +123,7 @@ To list available states:
 
 .. code-block:: bash
 
-    ox-orch info states
+    ox-orch schemas states
 
 Execution
 ---------

@@ -1,12 +1,12 @@
 from .base import cli
-from .info import info
+from .info import schemas
 from .apps import apps, list_apps, import_apps
 from .run import run, apply, rollback
 
 
 __all__ = (
     "cli",
-    "info",
+    "schemas",
     "apps",
     "list_apps",
     "import_apps",

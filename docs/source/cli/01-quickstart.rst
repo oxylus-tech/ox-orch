@@ -3,6 +3,21 @@
 Quickstart
 ==========
 
+Installation
+------------
+
+From `Pypi repository package <https://pypi.org/project/ox-orch/>`:
+
+.. code-block::
+
+    pip install ox-orch
+    # uv add ox-orch
+
+From Github:
+
+    pip install git+https://github.com/oxylus-tech/ox-orch.git
+
+
 Simple example
 --------------
 

@@ -17,7 +17,7 @@ class BaseFork(Operation):
     It does not implement the apply and rollback methods,
     only provide common argument and the :py:meth:`run`.
 
-    ** Read the doc of :py:meth:`ForkOperation` for more information. **
+    Read the doc of :py:meth:`ForkOperation` for more information.
     """
 
     operation: Operation = Field(description="Operation to run in the new subprocess.")

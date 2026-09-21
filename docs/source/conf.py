@@ -25,6 +25,7 @@ release = "1.0"
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
+    "sphinxcontrib.autodoc_pydantic",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",
     "sphinx.ext.autodoc",
@@ -55,3 +56,8 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 
 suppress_warnings = ["misc.highlighting_failure"]
+
+
+# -- Pydantic autodoc
+autodoc_pydantic_model_show_json = True
+autodoc_pydantic_settings_show_json = False
