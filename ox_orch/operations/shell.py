@@ -2,9 +2,9 @@ from typing import ClassVar
 
 from pydantic import Field
 
+from ox_orch.core.operation import Operation, OperationState
 from ox_orch.core.registry import register
 from ox_orch.core.shell import Shell
-from .base import Operation, OperationState
 
 
 __all__ = ("ShellMixin", "ShellState", "ShellOperation")

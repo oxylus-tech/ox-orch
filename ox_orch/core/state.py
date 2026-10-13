@@ -121,16 +121,17 @@ class State(StateInfo):
         return self.status in (Status.COMPLETED, Status.FAILED, Status.ROLLED_BACK)
 
     # ---- Status set
-    def set_status(self, status, error: str | Exception | None = None) -> State:
+    def set_status(self, status, error: str | Exception | None = None, force: bool = False) -> State:
         """Update status (validating transition).
 
         :param status: new status to assign.
         :param error: set error if provided.
+        :param force: don't validate state transition.
         :returns: self
         """
         # We put it before to ease inspection.
         exc = isinstance(error, Exception) and error or None
-        self.validate_transition(status, exc=exc)
+        not force and self.validate_transition(status, exc=exc)
         self.status = status
         if error is not None:
             self.error = str(error)
@@ -147,24 +148,24 @@ class State(StateInfo):
                 message += f"\nThis error happened while handling another one: {exc}\n\n" + traceback.format_exc()
             raise ValueError(message)
 
-    def start(self) -> State:
+    def start(self, force: bool = False) -> State:
         """Mark state as started."""
-        return self.set_status(Status.RUNNING)
+        return self.set_status(Status.RUNNING, force=force)
 
-    def rolling_back(self) -> State:
-        return self.set_status(Status.ROLLING_BACK)
+    def rolling_back(self, force: bool = False) -> State:
+        return self.set_status(Status.ROLLING_BACK, force=force)
 
-    def finish(self, state=Status.COMPLETED, exc: Optional[str | Exception] = None) -> State:
+    def finish(self, state=Status.COMPLETED, exc: Optional[str | Exception] = None, force: bool = False) -> State:
         """Mark state as finished."""
-        return self.set_status(Status.COMPLETED, exc)
+        return self.set_status(Status.COMPLETED, exc, force=force)
 
-    def rolled_back(self, exc: Optional[str | Exception] = None) -> State:
+    def rolled_back(self, exc: Optional[str | Exception] = None, force: bool = False) -> State:
         """Mark state as rolled back."""
-        return self.set_status(Status.ROLLED_BACK, exc)
+        return self.set_status(Status.ROLLED_BACK, exc, force=force)
 
-    def fail(self, exc: Exception) -> State:
+    def fail(self, exc: Exception, force: bool = False) -> State:
         """Mark state as failed."""
-        return self.set_status(Status.FAILED, exc)
+        return self.set_status(Status.FAILED, exc, force=force)
 
     # ---- Generic info & helpers
     def summary(self) -> str:
@@ -183,10 +184,10 @@ class HistoryState(State):
     history: list[StateInfo] = Field(default_factory=list)
     """ History of state transitions. """
 
-    def set_status(self, status, error: Optional[str | Exception] = None):
+    def set_status(self, status, error: Optional[str | Exception] = None, force: bool = False):
         """Update status (validating transition)."""
         state_info = StateInfo(status=self.status, error=self.error, updated=self.updated)
-        super().set_status(status, error)
+        super().set_status(status, error, force=force)
         self.history.append(state_info)
         return self
 

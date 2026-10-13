@@ -6,24 +6,17 @@ from typing import Generator
 
 from pydantic import Field, model_validator
 
-from ox_orch.operations import Operation, OperationState
-from ox_orch.hooks import ExecutorHook, EXECUTOR_HOOK_REGISTRY
-from ox_orch.core import (
-    ContextInput,
-    ContextInputs,
-    Context,
-    RunContext,
-    register,
-    State,
-    HookEmitter,
-    ShellSpec,
-    Shell,
-)
-from ox_orch.core.contexts import RawContextInputs
 from ox_orch.utils import load_modules
 
+from .contexts import ContextInput, ContextInputs, Context, RunContext, RawContextInputs
+from .operation import Operation, OperationState
+from .registry import register, DocumentedRegistry, DocumentedClass
+from .state import State
+from .events import HookEmitter, Hook
+from .shell import ShellSpec, Shell
 
-__all__ = ("ExecutionError", "ExecutionSpec", "Executor")
+
+__all__ = ("ExecutionError", "EXECUTOR_HOOK_REGISTRY", "ExecutorHook", "ExecutionContext", "ExecutionSpec", "Executor")
 
 
 logger = logging.getLogger(__name__)
@@ -33,6 +26,88 @@ class ExecutionError(Exception):
     """
     Raised when an operation execution or rollback fails.
     """
+
+
+EXECUTOR_HOOK_REGISTRY = DocumentedRegistry("Hooks", description="Hooks called on workflow execution.")
+
+
+class ExecutorHook(Hook, DocumentedClass):
+    """
+    Base hook class used by the runtime executor.
+
+    Hooks can be registered on the executor to observe execution,
+    persist states, report progress, emit logs, send notifications,
+    expose API events, etc.
+    """
+
+    __registry__ = EXECUTOR_HOOK_REGISTRY
+
+    def before_apply(self, operation, state, context):
+        """
+        Called before an operation execution starts.
+
+        :param operation: operation being executed
+        :param state: root operation state
+        :param context: execution context
+        """
+        pass
+
+    def after_apply(self, operation, state, context):
+        """
+        Called after a successful execution.
+
+        :param operation: executed operation
+        :param state: root operation state
+        """
+        pass
+
+    def apply_failed(self, operation, state, error):
+        """
+        Called when execution fails.
+
+        :param operation: executed operation
+        :param state: root operation state
+        :param error: raised exception
+        """
+        pass
+
+    def before_rollback(self, operation, state, context):
+        """
+        Called before rollback starts.
+
+        :param operation: operation being rolled back
+        :param state: root operation state
+        """
+        pass
+
+    def after_rollback(self, operation, state, context):
+        """
+        Called after a successful rollback.
+
+        :param operation: rolled back operation
+        :param state: root operation state
+        """
+        pass
+
+    def rollback_failed(self, operation, state, error):
+        """
+        Called when rollback fails.
+
+        :param operation: rolled back operation
+        :param state: root operation state
+        :param error: raised exception
+        """
+        pass
+
+    def state_update(self, state):
+        """
+        Called whenever an operation yields a state update.
+
+        This includes nested operations executed by plans.
+
+        :param state: yielded state
+        """
+        pass
 
 
 @register("execution")
@@ -156,7 +231,7 @@ class Executor(HookEmitter):
         # Run
         try:
             run_context.start()
-            for state in operation.apply(state, **context_inputs.contexts):
+            for state in operation.apply(state, context_inputs.contexts):
                 self.emit("state_update", state=state)
                 yield state
 
@@ -203,7 +278,7 @@ class Executor(HookEmitter):
         self.emit("before_rollback", operation, state, ctx)
 
         try:
-            for state in operation.rollback(state, **context_inputs.contexts):
+            for state in operation.rollback(state, context_inputs.contexts):
                 self.emit("state_update", state=state)
                 yield state
 

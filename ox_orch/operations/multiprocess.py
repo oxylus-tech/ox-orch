@@ -3,8 +3,8 @@ from typing import Any, Literal, Generator
 
 from pydantic import Field
 
-from ox_orch.core import register
-from .base import Operation, OperationState, DelegateOperation
+from ox_orch.core import register, Operation, OperationState
+from .base import DelegateOperation
 
 
 __all__ = ("BaseFork", "ForkOperation", "ForkChild", "fork_entry")
@@ -27,7 +27,7 @@ class BaseFork(Operation):
     )
     """ Max size for the MPC queue. """
 
-    def run(self, method, state, args, kwargs) -> Generator[OperationState, None]:
+    def run(self, method, state, context) -> Generator[OperationState, None]:
         queue = Queue(maxsize=self.queue_max_size)
         try:
             process = Process(
@@ -37,8 +37,7 @@ class BaseFork(Operation):
                     self.operation,
                     method,
                     state,
-                    args,
-                    kwargs,
+                    context,
                 ),
             )
             process.start()
@@ -110,11 +109,11 @@ class ForkOperation(BaseFork, DelegateOperation):
             kwargs["child"] = self.operation.create_state()
         return super().create_state(**kwargs)
 
-    def child_apply(self, state, *args, **kwargs):
-        yield from self.run("apply", state.child, args, kwargs)
+    def child_apply(self, state, **context):
+        yield from self.run("apply", state.child, context)
 
-    def child_rollback(self, state, *args, **kwargs):
-        yield from self.run("rollback", state.child, args, kwargs)
+    def child_rollback(self, state, **context):
+        yield from self.run("rollback", state.child, context)
 
 
 class ForkChild(Operation):
@@ -124,15 +123,15 @@ class ForkChild(Operation):
     In such case it will raise a RuntimeError on apply and rollback.
     """
 
-    def apply(self, *args, **kwargs):
-        if not kwargs.get("forked"):
+    def apply(self, state, context):
+        if not context.get("forked"):
             raise RuntimeError(f"{self.__type_id__} MUST be spawned from a fork operation.")
-        yield from super().apply(*args, **kwargs)
+        yield from super().apply(state, context)
 
-    def rollback(self, *args, **kwargs):
-        if not kwargs.get("forked"):
+    def rollback(self, state, context):
+        if not context.get("forked"):
             raise RuntimeError(f"{self.__type_id__} MUST be spawned from a fork operation.")
-        yield from super().rollback(*args, **kwargs)
+        yield from super().rollback(state, context)
 
 
 def fork_entry(
@@ -140,8 +139,7 @@ def fork_entry(
     operation: Operation,
     method: Literal["apply", "rollback"],
     state: OperationState,
-    args: list[Any],
-    kwargs: dict[str, Any],
+    context: dict[str, Any],
 ):
     """
     This is the main entry point to execute an operation into a child process.
@@ -160,8 +158,8 @@ def fork_entry(
 
     try:
         func = getattr(operation, method)
-        kwargs["forked"] = True
-        for st in func(state, *args, **kwargs):
+        context["forked"] = True
+        for st in func(state, context):
             queue.put(("state", st))
 
     except Exception as e:

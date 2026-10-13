@@ -2,9 +2,8 @@ import pytest
 from queue import Empty
 from multiprocessing import Queue
 
-from ox_orch.core import Status
+from ox_orch.core import Status, Operation, OperationState
 from ox_orch.operations.multiprocess import BaseFork, ForkOperation, fork_entry
-from ox_orch.operations.base import Operation, OperationState
 
 from .conftest import apply, rollback
 
@@ -45,8 +44,7 @@ class TestForkEntry:
             operation=op,
             method="apply",
             state=state,
-            args=[],
-            kwargs={},
+            context={},
         )
 
         results = []
@@ -71,8 +69,7 @@ class TestForkEntry:
                 operation=op,
                 method="apply",
                 state=state,
-                args=[],
-                kwargs={},
+                context={},
             )
 
         # ensure error message is in queue
@@ -96,8 +93,7 @@ class TestBaseFork:
         gen = runner.run(
             method="apply",
             state=state,
-            args=[],
-            kwargs={},
+            context={},
         )
 
         results = list(s.step for s in gen)
@@ -112,8 +108,7 @@ class TestBaseFork:
         gen = runner.run(
             method="apply",
             state=state,
-            args=[],
-            kwargs={},
+            context={},
         )
 
         with pytest.raises(RuntimeError, match="boom"):

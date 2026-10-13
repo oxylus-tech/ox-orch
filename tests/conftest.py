@@ -5,10 +5,18 @@ from importlib import metadata
 import pytest
 from pydantic import PrivateAttr, BaseModel
 
-from ox_orch.core import files, ContextInput, ContextInputs, Context, register
+from ox_orch.core import (
+    files,
+    ContextInput,
+    ContextInputs,
+    Context,
+    register,
+    Operation,
+    OperationState,
+    ExecutionContext,
+)
 from ox_orch.core.shell import EchoShell, ShellSpec
 from ox_orch.apps import Application, AppMemoryStore, AppFileStore, AppStateMemoryStore
-from ox_orch.operations import Operation, OperationState, ExecutionContext
 from ox_orch.operations.install import InstallOperation
 
 

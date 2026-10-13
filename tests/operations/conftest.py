@@ -2,28 +2,30 @@ from typing import Optional
 
 import pytest
 
-from ox_orch.core import state
-from ox_orch.operations import Plan, ExecutionContext
+from ox_orch.core import state, ExecutionContext
+from ox_orch.operations import Plan
 
 from ..conftest import Operation
 
 
-def apply(op, state, **kwargs):
+def apply(op, state, **context):
     """Apply operations and return a tuple of states and exception (if any)."""
     states, exc = [], None
+    context["execution"] = ExecutionContext()
     try:
-        for s in op.apply(state, ExecutionContext(), **kwargs):
+        for s in op.apply(state, context):
             states.append(s.model_copy(deep=True))
     except Exception as e:
         exc = e
     return states, exc
 
 
-def rollback(op, state, **kwargs):
+def rollback(op, state, **context):
     """Rollback operations and return a tuple of states and exception (if any)."""
     states, exc = [], None
+    context["execution"] = ExecutionContext()
     try:
-        for s in op.rollback(state, ExecutionContext(), **kwargs):
+        for s in op.rollback(state, context):
             states.append(s.model_copy(deep=True))
     except Exception as e:
         exc = e

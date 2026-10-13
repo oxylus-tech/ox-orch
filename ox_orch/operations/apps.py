@@ -6,8 +6,7 @@ from typing import Any, Iterable
 from pydantic import Field, field_validator
 
 from ox_orch.apps import Application, AppState, AppStore, AppStateStore, AppStateMemoryStore, InstallOrigin
-from ox_orch.core import register, Status, ChangeSet, ContextInput
-from .base import Operation
+from ox_orch.core import register, Status, ChangeSet, ContextInput, Operation
 from .install import InstallOperation, InstallContext
 from .plan import Plan, PlanState
 
@@ -191,10 +190,12 @@ class ReconciliationPlan(Plan):
 
     app_plan: AppPlan = Field(description="The application plan to apply.")
 
-    def _apply(self, state, execution, apps: AppsContext, only_dirty=False, **context):
+    def _apply(self, state, apps: AppsContext, only_dirty=False, **context):
         ctx, apps = apps, apps.apps
         if not apps:
             return
+
+        context["apps"] = ctx
 
         # Keep track of ids required by user
         ids = {app.id for app in apps}
@@ -215,7 +216,7 @@ class ReconciliationPlan(Plan):
             op_state = op.create_state()
             state.children.append(op_state)
 
-            yield from op.apply(op_state, execution, app=app, apps=ctx, **context)
+            yield from op.apply(op_state, {"app": app, **context})
 
         # 3. Collect registry update
         for op_state in state.children:
@@ -361,11 +362,11 @@ class AppsPlan(Plan):
             items.append(self.reconciliation)
         return items + self.operations
 
-    def _apply(self, state, execution, apps: AppsContext, **context):
+    def _apply(self, state, apps: AppsContext, **context):
         if self.install:
             context["install"] = InstallContext(packages=apps.apps)
 
-        yield from super()._apply(state, execution, apps=apps, **context)
+        yield from super()._apply(state, apps=apps, **context)
 
         state_store = apps.state_store
         state.merge_from(cs for cs in state.children if isinstance(cs, ChangeSet))
@@ -377,8 +378,8 @@ class AppsPlan(Plan):
             state_store.partial_commit(state.forward, allow_create=True, merge=True)
             state_store.save()
 
-    def _rollback(self, state, execution, apps: AppsContext, **context):
-        yield from super()._rollback(state, execution, apps=apps, **context)
+    def _rollback(self, state, apps: AppsContext, **context):
+        yield from super()._rollback(state, apps=apps, **context)
 
         state_store = apps.state_store
         if state.backward:

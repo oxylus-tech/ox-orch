@@ -1,6 +1,6 @@
 import pytest
 
-from ox_orch.operations.execution import ExecutionSpec, Executor
+from ox_orch.core.execution import ExecutionSpec, Executor
 from ox_orch.operations import AppsPlan, UvInstall, ForkOperation
 from ox_orch.django import DjangoProjectSync, DjangoEnable
 

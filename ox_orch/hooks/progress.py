@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from ox_orch.core.registry import register
-from ..operations import OperationState
-from .base import ExecutorHook
+from ox_orch.core import register, OperationState, ExecutorHook
 
 
 __all__ = ("ProgressHook",)

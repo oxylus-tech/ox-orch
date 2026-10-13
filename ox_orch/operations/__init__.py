@@ -1,18 +1,9 @@
 from typing import Generator
 
+from ox_orch.core.execution import ExecutionContext
+from ox_orch.core.operation import Operation, OperationState
 from ox_orch.core.state import Status
 
-from .base import (
-    OPERATION_REGISTRY,
-    STATE_REGISTRY,
-    RunContext,
-    OperationState,
-    Operation,
-    RunPython,
-    DelegateOperation,
-    DelegateState,
-)
-from .execution import ExecutionError, ExecutionSpec, ExecutionContext, Executor
 from .plan import Plan
 
 from .apps import (
@@ -25,26 +16,20 @@ from .apps import (
     ReconciliationPlan,
     AppsPlan,
 )
+from .base import RunPython, DelegateOperation, DelegateState
 from .install import PipInstall, UvInstall, PoetryInstall, CheckPackageInstalled, CheckPackageInstalledState
 from .multiprocess import ForkOperation
 from .shell import ShellOperation
 
 
 __all__ = (
-    # Base
-    "OPERATION_REGISTRY",
-    "STATE_REGISTRY",
-    "RunContext",
-    "OperationState",
+    # Re-export
     "Operation",
+    "OperationState",
+    # Base
     "RunPython",
     "DelegateState",
     "DelegateOperation",
-    # Execution
-    "ExecutionError",
-    "ExecutionSpec",
-    "ExecutionContext",
-    "Executor",
     # Plan
     "Plan",
     # Apps
@@ -75,7 +60,7 @@ def apply(
     state: OperationState,
     execution: ExecutionContext | None = None,
     # state_backend: Optional[StateBackend] = None,
-    **kwargs
+    **context
 ) -> Generator[OperationState, None, None]:
     """
     Apply operation saving state at each change and handling rolling back on error.
@@ -83,10 +68,10 @@ def apply(
     :param operation: the actual operation to apply.
     :param execution: execution context.
     :param state_backend: the state backend used to load and store the operation's state.
-    :param **kwargs: arguments passed to the operation.
+    :param **context: arguments passed to the operation.
     """
-    execution = execution or ExecutionContext()
-    for state_ in operation.apply(state, execution, **kwargs):
+    context["execution"] = execution or ExecutionContext()
+    for state_ in operation.apply(state, context):
         # state_backend and state_backend.save(state_)
         yield state
 
@@ -96,7 +81,7 @@ def rollback(
     state: OperationState,
     execution: ExecutionContext | None = None,
     # state_backend: Optional[StateBackend] = None,
-    **kwargs
+    **context
 ) -> Generator[OperationState, None, None]:
     """
     Apply operation saving state at each change and handling rolling back on error.
@@ -104,10 +89,10 @@ def rollback(
     :param operation: the actual operation to apply.
     :param execution: execution context.
     :param state_backend: the state backend used to load and store the operation's state.
-    :param **kwargs: arguments passed to the operation.
+    :param **context: arguments passed to the operation.
     """
-    execution = execution or ExecutionContext()
-    for state_ in operation.rollback(state, execution, **kwargs):
+    context["execution"] = execution or ExecutionContext()
+    for state_ in operation.rollback(state, context):
         # state_backend and state_backend.save(state_)
         yield state
 

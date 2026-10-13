@@ -135,7 +135,11 @@ class TestAppPlan:
 class TestReconciliationPlan:
     def test__apply(self, reconciliation, execution, apps_ctx, app_dep, app_dep_1, app_meta, app_meta_1):
         state = reconciliation.create_state()
-        consume_iter(reconciliation._apply(state, execution, apps_ctx, shell=EchoShell(), enable=True, install=True))
+        consume_iter(
+            reconciliation._apply(
+                state, execution=execution, apps=apps_ctx, shell=EchoShell(), enable=True, install=True
+            )
+        )
 
         expected_changes = [app_meta, app_meta_1, app_dep]
         resolved_changes = [st.app for st in state.children]
@@ -158,7 +162,7 @@ class TestAppsPlan:
 
     def test__apply_and_rollback(self, execution, apps_plan, apps_ctx, app_dep, app_dep_1, app_meta, app_meta_1):
         state = apps_plan.create_state()
-        consume_iter(apps_plan._apply(state, execution, apps_ctx, shell=EchoShell()))
+        consume_iter(apps_plan._apply(state, execution=execution, apps=apps_ctx, shell=EchoShell()))
 
         app_ids = list(state.forward.keys())
         assert app_ids
@@ -172,7 +176,7 @@ class TestAppsPlan:
                 assert app_state.features["test-op-apps"] == AppStateFeatureTest(name=app_state.id, value=123)
 
         # ---- Rollback!
-        consume_iter(apps_plan._rollback(state, execution, apps_ctx, shell=EchoShell()))
+        consume_iter(apps_plan._rollback(state, execution=execution, apps=apps_ctx, shell=EchoShell()))
 
         for app_state in apps_ctx.state_store.get_all(app_ids):
             assert not app_state.features

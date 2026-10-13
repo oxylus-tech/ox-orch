@@ -1,8 +1,8 @@
 import pytest
 
 from ox_orch.core.state import Status
-from ox_orch.operations.execution import Executor, ExecutionError, ExecutionSpec
-from ox_orch.operations import Operation
+from ox_orch.core.execution import Executor, ExecutionError, ExecutionSpec
+from ox_orch.core.operation import Operation
 
 from ..conftest import ContextStrInput
 

@@ -17,9 +17,8 @@ from typing import Iterable
 
 from pydantic import Field
 
-from ox_orch.core import ChangeSet, ContextInput, register
+from ox_orch.core import ChangeSet, ContextInput, register, OperationState, Operation
 from ox_orch.apps import AppRelease
-from .base import OperationState, Operation
 from .shell import ShellMixin
 
 
