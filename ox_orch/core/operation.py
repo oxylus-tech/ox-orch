@@ -3,7 +3,7 @@ from enum import Enum, IntEnum, IntFlag, auto
 from dataclasses import dataclass
 import inspect
 import logging
-from typing import Any, Generator, ClassVar, Protocol, Sequence, Type
+from typing import Any, Generator, ClassVar, Sequence, Type
 from uuid import uuid4, UUID
 
 from pydantic import Field
@@ -16,6 +16,9 @@ from .state import HistoryState, Status
 
 __all__ = (
     "Status",  # re-export for convenience
+    "STATE_REGISTRY",
+    "OPERATION_REGISTRY",
+    "POLICY_REGISTRY",
     "Action",
     "OperationCapabilities",
     "InspectResult",
@@ -24,8 +27,6 @@ __all__ = (
     "OperationContext",
     "OperationState",
     "Operation",
-    "STATE_REGISTRY",
-    "OPERATION_REGISTRY",
     "DefaultPolicy",
 )
 
@@ -34,7 +35,8 @@ logger = logging.getLogger("ox-orch")
 
 
 STATE_REGISTRY = DocumentedRegistry("Operation States")
-OPERATION_REGISTRY = DocumentedRegistry("States")
+POLICY_REGISTRY = DocumentedRegistry("Operation Policies")
+OPERATION_REGISTRY = DocumentedRegistry("Operations")
 
 
 class OperationCapabilities(IntFlag):
@@ -141,8 +143,14 @@ class OperationPhase(Enum):
     ROLLBACK = "rollback"
 
 
-class Policy(Protocol):
-    """Interface for deciding how an operation should proceed."""
+class Policy(DocumentedClass):
+    """
+    Interface for deciding how an operation should proceed.
+
+    It is used to determine what to do depending on the :py:meth:`Operation.inspect` result.
+    """
+
+    __registry__ = POLICY_REGISTRY
 
     def decide(self, operation: Operation, result: InspectResult, phase: OperationPhase) -> Action | None:
         """Decide which action should follow an inspection.
@@ -201,17 +209,31 @@ class Operation(PolymorphicModel, DocumentedClass):
     Implementator will implement the actual operation calls inside :py:meth:`_apply`
     and :py:meth:`_rollback`. Those can be regular method or a OperationState generator.
 
-    .. note::
+    Inspect & Policy
+    ----------------
 
-        For the class to be serializable/deserializable, set :py:attr:`ox_orch.utils.PolymorphicModel`. The value is namespaced
-        under ``op:``:
+    We can't trust only the input state to run an operation; eg. after a failure or
+    interruption, we can't be sure state is right.
 
-        .. code-block:: python
+    The :py:meth:`inspect` is used to determine the real current state of an operation
+    to apply. This allows safer decision making depending on what is actually applied
+    or not on the target environment.
 
-            class MyOp(Operation):
-                # This is used as state.operation_id value
-                __type_id__ = "op:my_op"
+    The resulting :py:class:`InspectResult` is passed down to the :py:class:`Policy`,
+    allowing it to take an actual decision: either proceed, skip, abort or ask upstream
+    (end-user, executor) what to do.
 
+    Capabilities
+    ------------
+
+    An operation declares its :py:attr:`capabilities` (see :py:class:`Capabilities`), allowing a :py:class:`Policy`
+    to decide which action to take depending on the current state inspection.
+
+    Polymorphism
+    ------------
+
+    Operations must be serializable, as they can be retrieved from a description file/input. As such, they are :py:class:`~ox_orch.core.pydantic.PolymorphicModel`
+    and use the :py:mod:`~ox_orch.core.registry` mechanisms.
     """
 
     __registry__ = OPERATION_REGISTRY
@@ -255,7 +277,7 @@ class Operation(PolymorphicModel, DocumentedClass):
     _description: ClassVar[str] = ""
     """ Human description of this operation. """
     _default_inspect_type: ClassVar[InspectResult.Type] = InspectResult.Type.UNKNOWN
-    """  """
+    """ Inspect method result used by default. """
     capabilities: ClassVar[OperationCapabilities] = OperationCapabilities.NONE
     """ Operation capabilities. """
 
@@ -286,9 +308,9 @@ class Operation(PolymorphicModel, DocumentedClass):
         """
         try:
             self.validate_state(state)
-            policy = self.get_policy(context)
+            policy = self._get_policy(context)
             result = self.inspect(state, context)
-            action = self.decide(result, OperationPhase.APPLY, policy)
+            action = self._decide(result, OperationPhase.APPLY, policy)
 
             match action:
                 case Action.ACCEPT:
@@ -300,6 +322,7 @@ class Operation(PolymorphicModel, DocumentedClass):
                     pass
 
             context = self.get_context(state, **context)
+            context.setdefault("policy", policy)
             context = self._resolve_apply_context(context)
 
             if context.get("dry_run"):
@@ -329,9 +352,9 @@ class Operation(PolymorphicModel, DocumentedClass):
         try:
             self.validate_state(state)
 
-            policy = self.get_policy(context)
+            policy = self._get_policy(context)
             result = self.inspect(state, context)
-            action = self.decide(result, OperationPhase.ROLLBACK, policy)
+            action = self._decide(result, OperationPhase.ROLLBACK, policy)
 
             match action:
                 case Action.ACCEPT:
@@ -343,6 +366,7 @@ class Operation(PolymorphicModel, DocumentedClass):
                     pass
 
             context = self.get_context(state, **context)
+            context.setdefault("policy", policy)
             context = self._resolve_rollback_context(context)
 
             if context.get("dry_run"):
@@ -383,11 +407,11 @@ class Operation(PolymorphicModel, DocumentedClass):
             context.setdefault("dry_run", execution.spec and execution.spec.dry_run)
         return context
 
-    def get_policy(self, context: OperationContext) -> Policy:
+    def _get_policy(self, context: OperationContext) -> Policy:
         """Retrieve execution policy from the context."""
         return context.get("policy") or DefaultPolicy()
 
-    def decide(
+    def _decide(
         self, result: InspectResult, phase: OperationPhase, policy: Policy
     ) -> Generator[InspectResult, Action, Action]:
         action = policy.decide(self, result, phase)
@@ -525,8 +549,12 @@ class Operation(PolymorphicModel, DocumentedClass):
         getattr(logger, type)(msg, *args, **kwargs)
 
 
-class DefaultPolicy:
+@register("default")
+class DefaultPolicy(Policy):
     """Default policy for applying and rolling back operations."""
+
+    _label = "Default"
+    _description = "Default policy for applying and rolling back operations."
 
     def decide(
         self,
