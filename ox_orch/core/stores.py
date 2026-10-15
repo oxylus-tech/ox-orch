@@ -7,7 +7,7 @@ from typing import Any, Generic, TypeVar, Iterable, Iterator, Type
 
 from pydantic import BaseModel, Field, TypeAdapter
 
-
+from .exceptions import StoreNotFoundError
 from .files import FileBackend, GenericFileBackend
 from .pydantic import PolymorphicModel
 
@@ -17,21 +17,6 @@ __all__ = ("StoreMetadata", "Store", "MemoryStore", "FileStoreModel", "FileStore
 
 K = TypeVar("K")
 V = TypeVar("V", bound=BaseModel | TypeAdapter)
-
-
-class StoreNotFoundError(KeyError):
-    """
-    Error raised when one or multiple items couldn't be found in the store.
-    """
-
-    missing_keys: list[K]
-    """ Missing items keys. """
-
-    def __init__(self, missing_keys: list[K], msg=None, **kwargs):
-        if not msg:
-            msg = f"The following items could not be found: {', '.join(missing_keys)}"
-        self.missing_keys = missing_keys
-        super().__init__(msg, **kwargs)
 
 
 class StoreMetadata(BaseModel):

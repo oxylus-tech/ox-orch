@@ -9,6 +9,7 @@ from uuid import uuid4, UUID
 from pydantic import Field
 
 from .contexts import RunContext
+from .exceptions import OperationAbort
 from .pydantic import LazyTranslation, PolymorphicModel
 from .registry import register, DocumentedRegistry, DocumentedClass
 from .state import HistoryState, Status
@@ -16,6 +17,7 @@ from .state import HistoryState, Status
 
 __all__ = (
     "Status",  # re-export for convenience
+    "OperationAbort",
     "STATE_REGISTRY",
     "OPERATION_REGISTRY",
     "POLICY_REGISTRY",
@@ -97,19 +99,19 @@ class InspectResult:
 
     @classmethod
     def satisfied(cls, *args, **kwargs):
-        return cls(cls.SATISFIED, *args, **kwargs)
+        return cls(cls.Type.SATISFIED, *args, **kwargs)
 
     @classmethod
     def not_satisfied(cls, *args, **kwargs):
-        return cls(cls.NOT_SATISFIED, *args, **kwargs)
+        return cls(cls.Type.NOT_SATISFIED, *args, **kwargs)
 
     @classmethod
     def unknown(cls, *args, **kwargs):
-        return cls(cls.UNKNOWN, *args, **kwargs)
+        return cls(cls.Type.UNKNOWN, *args, **kwargs)
 
     @classmethod
     def blocked(cls, *args, **kwargs):
-        return cls(cls.BLOCKED, *args, **kwargs)
+        return cls(cls.Type.BLOCKED, *args, **kwargs)
 
     @property
     def is_satisfied(self):
@@ -287,11 +289,9 @@ class Operation(PolymorphicModel, DocumentedClass):
 
     def create_state(self, **kwargs) -> OperationState:
         """Return a new initial operation state."""
-        return self.__state_class__(
-            operation_id=self.id,
-            _operation=self,
-            **kwargs,
-        )
+        state = self.__state_class__(operation_id=self.id, **kwargs)
+        state._operation = self
+        return state
 
     def inspect(self, state: OperationState, context) -> InspectResult:
         return InspectResult(self._default_inspect_type, self, state)
@@ -310,14 +310,14 @@ class Operation(PolymorphicModel, DocumentedClass):
             self.validate_state(state)
             policy = self._get_policy(context)
             result = self.inspect(state, context)
-            action = self._decide(result, OperationPhase.APPLY, policy)
+            action = yield from self._decide(result, OperationPhase.APPLY, policy)
 
             match action:
                 case Action.ACCEPT:
                     yield state.finish(force=True)
                     return
                 case Action.ABORT:
-                    raise RuntimeError("Operation apply aborted")
+                    raise OperationAbort("Apply aborted")
                 case Action.APPLY:
                     pass
 
@@ -354,14 +354,14 @@ class Operation(PolymorphicModel, DocumentedClass):
 
             policy = self._get_policy(context)
             result = self.inspect(state, context)
-            action = self._decide(result, OperationPhase.ROLLBACK, policy)
+            action = yield from self._decide(result, OperationPhase.ROLLBACK, policy)
 
             match action:
                 case Action.ACCEPT:
                     yield state.rolled_back(force=True)
                     return
                 case Action.ABORT:
-                    raise RuntimeError("Operation rollback aborted")
+                    raise OperationAbort("Rollback aborted")
                 case Action.APPLY:
                     pass
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import json
 import os
 import subprocess
 import sys
@@ -127,6 +128,14 @@ class Shell(ABC):
         """
         return [self.python, "-m", module, *args]
 
+    def get_installed_packages(self) -> dict[str, str]:
+        """
+        Return installed python packages from the shell environment.
+        """
+        result = self.run_python_module(["pip", "list", "--format=json"])
+        data = json.loads(result.stdout)
+        return {item["name"]: item["version"] for item in data}
+
 
 class EchoShell(Shell):
     """Simple sandbox that only print the command."""
@@ -156,7 +165,7 @@ class LocalShell(Shell):
             list(command),
             cwd=config.cwd,
             env=env,
-            # capture_output=True,
+            capture_output=True,
             text=True,
             timeout=config.timeout,
             check=False,

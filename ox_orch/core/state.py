@@ -74,6 +74,10 @@ class State(StateInfo):
     Generic State interface from which all states are derived.
 
     You MUST provide :py:attr:`_transitions` class attribute on subclasses.
+
+    You SHOULD use setter methods to ensure state transition validation (:py:meth:`validate_transition`). If you
+    want to by-pass this validation, you can use the ``force`` argument.
+
     """
 
     id: UUID = Field(default_factory=uuid4)

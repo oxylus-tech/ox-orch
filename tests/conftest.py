@@ -1,20 +1,13 @@
 from dataclasses import dataclass
 from pathlib import Path
 from importlib import metadata
+from typing import Optional
 
 import pytest
 from pydantic import PrivateAttr, BaseModel
 
-from ox_orch.core import (
-    files,
-    ContextInput,
-    ContextInputs,
-    Context,
-    register,
-    Operation,
-    OperationState,
-    ExecutionContext,
-)
+from ox_orch.core import files, ContextInput, ContextInputs, Context, register, ExecutionContext, Status
+from ox_orch.core.operation import Operation, OperationState, InspectResult
 from ox_orch.core.shell import EchoShell, ShellSpec
 from ox_orch.apps import Application, AppMemoryStore, AppFileStore, AppStateMemoryStore
 from ox_orch.operations.install import InstallOperation
@@ -35,6 +28,15 @@ class Operation(Operation):
     applied: bool = False
     rollbacked: bool = False
     __type_id__ = "op:test:operation"
+
+    def inspect(self, state, context):
+        """Return the value provided by context's "inspect".
+
+        :param context.inspect: InspectResult.Type
+        """
+        if result_type := context.get("inspect"):
+            return InspectResult(result_type, self, state)
+        return super().inspect(state, context)
 
     def _apply(self, state, exc=None, **kw):
         if exc:
@@ -64,7 +66,7 @@ class FakeInstall(InstallOperation):
     def uninstall(self, state, shell, packages, **_):
         self._last_uninstall = packages
 
-    def _snapshot(self, apps, dry_run=False):
+    def _snapshot(self, shell, apps, dry_run=False):
         if not self._called:
             versions = package_versions
             self._called = True
@@ -80,6 +82,45 @@ class FakeInstall(InstallOperation):
 class DummyModel(BaseModel):
     name: str
     value: int = 0
+
+
+def apply(op, state, **context):
+    """Apply operations and return a tuple of states and exception (if any)."""
+    states, exc = [], None
+    context["execution"] = ExecutionContext()
+    try:
+        for s in op.apply(state, context):
+            states.append(s.model_copy(deep=True))
+    except Exception as e:
+        exc = e
+    return states, exc
+
+
+def rollback(op, state, **context):
+    """Rollback operations and return a tuple of states and exception (if any)."""
+    states, exc = [], None
+    context["execution"] = ExecutionContext()
+    try:
+        for s in op.rollback(state, context):
+            states.append(s.model_copy(deep=True))
+    except Exception as e:
+        exc = e
+    return states, exc
+
+
+def assert_states(states, expected: list[tuple[str, Status, Optional[str | Exception]]]):
+    """
+    Assert states values from the provided list of expected results.
+
+    Expected values are tuples of: ``operation_id``, ``status: Status``, ``error: str`` (optional).
+    """
+    assert len(states) == len(expected)
+
+    for op_state, (operation_id, status, *err) in zip(states, expected):
+        assert op_state.operation_id == operation_id
+        assert op_state.status == status
+        if err:
+            assert op_state.error == str(err[0])
 
 
 @register("test_str_input")

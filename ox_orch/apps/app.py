@@ -165,7 +165,14 @@ class AppRelease(Versioned):
         return value
 
     def get_installed_version(self) -> str | None:
-        """Return installed version read from environment metadata."""
+        """Return installed version read from environment metadata.
+
+        .. important::
+
+            This method does not fit to get installed version of another
+            environment (as for install operation).
+
+        """
         try:
             return metadata.version(self.package)
         except metadata.PackageNotFoundError:

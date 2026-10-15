@@ -80,18 +80,18 @@ class InstallOperation(ShellMixin, Operation):
         if not apps:
             return
 
-        state.backward = self._snapshot(apps)
+        state.backward = self._snapshot(execution.shell, apps)
 
         options = self.get_install_options()
 
-        apps_req = self._snapshot(apps, True)
+        apps_req = self._snapshot(execution.shell, apps, True)
         self.log("Install:\n" + "\n".join(f"- {v['package']} @ {v['version']}" for v in state.backward.values()))
 
         if contexts.get("dry_run"):
             state.forward = apps_req
         else:
             self.install(state, execution.shell, apps_req.values(), options=options)
-            state.forward = self._snapshot(apps)
+            state.forward = self._snapshot(execution.shell, apps)
 
     def _rollback(self, state, execution, **contexts):
         downgrade = [values for values in state.backward.values() if values.get("version") is not None]
@@ -115,12 +115,15 @@ class InstallOperation(ShellMixin, Operation):
             options.append("--force-reinstall")
         return options
 
-    def _snapshot(self, apps, dry_run=False):
+    def _snapshot(self, shell, apps, dry_run=False):
+        if not dry_run:
+            installed = shell.get_installed_packages()
+
         return {
             app.id: {
                 "package": app.package,
                 "source": app.source or app.package,
-                "version": app.version if dry_run else app.get_installed_version(),
+                "version": app.version if dry_run else installed[app.package],
             }
             for app in apps
         }

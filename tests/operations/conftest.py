@@ -1,50 +1,11 @@
-from typing import Optional
-
 import pytest
 
-from ox_orch.core import state, ExecutionContext
 from ox_orch.operations import Plan
 
-from ..conftest import Operation
+from ..conftest import Operation, apply, rollback, assert_states
 
 
-def apply(op, state, **context):
-    """Apply operations and return a tuple of states and exception (if any)."""
-    states, exc = [], None
-    context["execution"] = ExecutionContext()
-    try:
-        for s in op.apply(state, context):
-            states.append(s.model_copy(deep=True))
-    except Exception as e:
-        exc = e
-    return states, exc
-
-
-def rollback(op, state, **context):
-    """Rollback operations and return a tuple of states and exception (if any)."""
-    states, exc = [], None
-    context["execution"] = ExecutionContext()
-    try:
-        for s in op.rollback(state, context):
-            states.append(s.model_copy(deep=True))
-    except Exception as e:
-        exc = e
-    return states, exc
-
-
-def assert_states(states, expected: list[tuple[str, state.Status, Optional[str | Exception]]]):
-    """
-    Assert states values from the provided list of expected results.
-
-    Expected values are: ``operation_id``, ``status``, ``error`` (optional).
-    """
-    assert len(states) == len(expected)
-
-    for op_state, (operation_id, status, *err) in zip(states, expected):
-        assert op_state.operation_id == operation_id
-        assert op_state.status == status
-        if err:
-            assert op_state.error == str(err[0])
+__all__ = ("apply", "rollback", "assert_states")
 
 
 @pytest.fixture
