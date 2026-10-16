@@ -6,7 +6,7 @@ from typing import Iterable, TypeAlias
 
 from pydantic import Field, BaseModel, field_validator, model_validator
 
-from ox_orch.core import stores, register, FileBackend, JSONBackend, Registry, RegisteredClass, PolymorphicModel
+from ox_orch.core import stores, register, FileBackend, JSONBackend, Registry, RegisteredClass, PolymorphicModel, Shell
 from ox_orch.utils import map_or_return
 
 
@@ -164,7 +164,7 @@ class AppRelease(Versioned):
             )
         return value
 
-    def get_installed_version(self) -> str | None:
+    def get_installed_version(self, shell: Shell | None = None) -> str | None:
         """Return installed version read from environment metadata.
 
         .. important::
@@ -173,6 +173,9 @@ class AppRelease(Versioned):
             environment (as for install operation).
 
         """
+        if shell:
+            return shell.get_installed_package(self.package)
+
         try:
             return metadata.version(self.package)
         except metadata.PackageNotFoundError:

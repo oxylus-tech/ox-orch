@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from importlib import metadata
 from typing import Optional
+import shutil
+import subprocess
+import sys
 
 import pytest
 from pydantic import PrivateAttr, BaseModel
@@ -260,3 +263,29 @@ def context_inputs():
 @pytest.fixture
 def shell():
     return EchoShell(ShellSpec(backend="echo"))
+
+
+@pytest.fixture(scope="session")
+def local_shell(data_dir: Path):
+    """Provide a LocalShell backed by a temporary virtual environment."""
+    tmp_dir = data_dir / "tmp"
+    venv_dir = tmp_dir / "local-shell-venv"
+
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Remove a potentially stale environment from a previous test run.
+    shutil.rmtree(venv_dir, ignore_errors=True)
+
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(venv_dir)],
+            check=True,
+        )
+
+        # Adapt the import and constructor to your implementation.
+        from ox_orch.core.shell import LocalShell
+
+        yield LocalShell(python=str(venv_dir / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")))
+
+    finally:
+        shutil.rmtree(venv_dir, ignore_errors=True)

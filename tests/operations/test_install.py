@@ -61,7 +61,7 @@ class TestInstallOperation:
             "b": {"package": "b", "source": "b", "version": None},
         }
 
-        op._rollback(state, execution, shell=EchoShell())
+        op._rollback(state, execution)
 
         # uninstall case
         assert op._last_uninstall == ["b"]

@@ -131,10 +131,38 @@ class Shell(ABC):
     def get_installed_packages(self) -> dict[str, str]:
         """
         Return installed python packages from the shell environment.
+
+        Currently using ``pip show``.
         """
         result = self.run_python_module(["pip", "list", "--format=json"])
         data = json.loads(result.stdout)
         return {item["name"]: item["version"] for item in data}
+
+    def get_installed_package(self, package: str) -> dict | None:
+        """
+        Return the installed package metadata, or None if not installed.
+
+        .. note::
+
+            As for :py:meth:`get_installed_packages`, this method involves
+            to create a new subprocess in the right environment. This means
+            extra-cost. Only use this method when not batching, and try to
+            optimize such accesses.
+
+        """
+        script = (
+            "import importlib.metadata as m, json, sys; "
+            "name = sys.argv[1]; "
+            "d = next((d for d in m.distributions() "
+            "if d.metadata['Name'] and "
+            "m.Prepared.normalize(d.metadata['Name']) == "
+            "m.Prepared.normalize(name)), None); "
+            "print(json.dumps(None if d is None else {"
+            "'name': d.metadata['Name'], "
+            "'version': d.version}))"
+        )
+        result = self.run_python(["-c", script, package])
+        return json.loads(result.stdout)
 
 
 class EchoShell(Shell):
